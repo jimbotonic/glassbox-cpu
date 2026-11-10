@@ -1,0 +1,9 @@
+GlassBox CPU
+Copyright (C) 2026 The GlassBox CPU contributors
+
+GlassBox CPU is a fork of 8-bit CPU Simulator by AbdulMuaz (devmuaz),
+https://github.com/devmuaz/8bit-CPU-Simulator, released under the MIT License
+(see LICENSE-MIT). Code from that project remains available under MIT.
+
+All modifications and additions in GlassBox CPU are licensed under the
+GNU General Public License v3.0 (see LICENSE).
