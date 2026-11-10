@@ -253,8 +253,9 @@ Contributions are welcome! Whether it's bug reports, feature requests, or code c
 
 ## License
 
-This project is open source and available under the MIT License.
+GlassBox CPU is licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE).
 
----
+It is based on [8-bit CPU Simulator](https://github.com/devmuaz/8bit-CPU-Simulator) by [devmuaz](https://devmuaz.com),
+released under the MIT License — see [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
+Inspired by [Ben Eater](https://eater.net)'s 8-bit breadboard computer.
 
-Built with Flutter by [devmuaz](https://devmuaz.com)
