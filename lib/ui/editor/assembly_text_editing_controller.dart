@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/assembler.dart';
 import '../../core/opcode.dart';
 import '../../core/operand.dart';
 
@@ -8,64 +9,52 @@ class AssemblyTextEditingController extends TextEditingController {
   AssemblyTextEditingController({super.text});
 
   static const Color highlightColor = Color(0x55FFC107); // translucent amber
+  static const Color labelColor = Color(0xFFFFD866);
+  static const Color directiveColor = Color(0xFF4EC9B0);
+  static const Color symbolColor = Color(0xFF9CDCFE);
+  static const Color stringColor = Color(0xFFCE9178);
 
   /// 0-based line drawn with a highlight background (the instruction being
   /// executed), or null. Read in [buildTextSpan], so the owning widget must
   /// rebuild the TextField after changing it.
   int? highlightedLine;
 
+  /// Optional label, then the first word: the mnemonic or directive.
+  static final _leadingWord = RegExp(
+    r'^(\s*(?:[A-Za-z_]\w*\s*:\s*)?)([A-Za-z]+)\b',
+  );
+
+  static final _token = RegExp(
+    r'''"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|[A-Za-z_.]\w*:?|#|-?(?:0[xX][0-9A-Fa-f]*|0[bB][01]*|\d+)|\s+|.''',
+  );
+
   @override
   set value(TextEditingValue newValue) {
-    final normalizedText = _normalizeOpcodes(newValue.text);
+    final normalizedText = newValue.text
+        .split('\n')
+        .map(_normalizeOpcodeLine)
+        .join('\n');
 
-    if (normalizedText != newValue.text) {
-      super.value = newValue.copyWith(
-        text: normalizedText,
-        selection: newValue.selection,
-      );
-    } else {
-      super.value = newValue;
-    }
+    super.value = normalizedText == newValue.text
+        ? newValue
+        : newValue.copyWith(text: normalizedText);
   }
 
-  String _normalizeOpcodes(String text) {
-    final lines = text.split('\n');
-    final normalizedLines = <String>[];
-
-    for (final line in lines) {
-      normalizedLines.add(_normalizeOpcodeLine(line));
-    }
-
-    return normalizedLines.join('\n');
-  }
-
+  /// Upper-cases a known mnemonic so `lda` reads as `LDA`. Same length, so
+  /// the selection stays valid.
   String _normalizeOpcodeLine(String line) {
-    final commentIndex = line.indexOf(';');
-    final codePart = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
-    final comment = commentIndex >= 0 ? line.substring(commentIndex) : '';
+    final comment = findCommentStart(line);
+    final code = comment >= 0 ? line.substring(0, comment) : line;
+    final match = _leadingWord.firstMatch(code);
+    if (match == null) return line;
 
-    if (codePart.trim().isEmpty) return line;
-
-    final trimmedCode = codePart.trimLeft();
-    final leadingWhitespace = codePart.substring(
-      0,
-      codePart.length - trimmedCode.length,
-    );
-    final parts = trimmedCode.split(RegExp(r'\s+'));
-
-    if (parts.isEmpty || parts[0].isEmpty) return line;
-
-    final instructionUpper = parts[0].toUpperCase();
-    final isValidOpcode = Opcode.values.any(
-      (op) => op.mnemonic == instructionUpper,
-    );
-
-    if (isValidOpcode && parts[0] != instructionUpper) {
-      final afterInstruction = trimmedCode.substring(parts[0].length);
-      return leadingWhitespace + instructionUpper + afterInstruction + comment;
+    final word = match.group(2)!;
+    final upper = word.toUpperCase();
+    if (word == upper || !Opcode.values.any((op) => op.mnemonic == upper)) {
+      return line;
     }
-
-    return line;
+    final start = match.group(1)!.length;
+    return line.replaceRange(start, start + word.length, upper);
   }
 
   @override
@@ -78,10 +67,9 @@ class AssemblyTextEditingController extends TextEditingController {
     final List<TextSpan> spans = [];
 
     for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      final lineSpans = _lineSpans(lines[lineIndex], style);
       if (lineIndex == highlightedLine) {
         // Child spans inherit the background from this parent span.
-        final List<TextSpan> lineSpans = [];
-        _processLine(lines[lineIndex], style, lineSpans);
         spans.add(
           TextSpan(
             style: const TextStyle(backgroundColor: highlightColor),
@@ -89,7 +77,7 @@ class AssemblyTextEditingController extends TextEditingController {
           ),
         );
       } else {
-        _processLine(lines[lineIndex], style, spans);
+        spans.addAll(lineSpans);
       }
 
       if (lineIndex < lines.length - 1) {
@@ -100,256 +88,84 @@ class AssemblyTextEditingController extends TextEditingController {
     return TextSpan(style: style, children: spans);
   }
 
-  void _processLine(String line, TextStyle? style, List<TextSpan> spans) {
-    final lineParts = _splitLineIntoCodeAndComment(line);
+  List<TextSpan> _lineSpans(String line, TextStyle? style) {
+    final spans = <TextSpan>[];
+    final comment = findCommentStart(line);
+    final code = comment >= 0 ? line.substring(0, comment) : line;
 
-    if (lineParts.codePart.trim().isNotEmpty) {
-      _processCodePart(
-        lineParts.codePart,
-        lineParts.commentIndex,
-        style,
-        spans,
-      );
-    } else if (lineParts.codePart.isNotEmpty) {
-      spans.add(TextSpan(text: lineParts.codePart, style: style));
-    }
+    bool seenKeyword = false;
+    bool seenToken = false;
+    for (final match in _token.allMatches(code)) {
+      final token = match.group(0)!;
+      Color? color;
+      bool bold = false;
 
-    if (lineParts.comment != null) {
-      _processComment(lineParts.comment!, style, spans);
-    }
-  }
-
-  _LineParts _splitLineIntoCodeAndComment(String line) {
-    final commentIndex = line.indexOf(';');
-    final codePart = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
-    final comment = commentIndex >= 0 ? line.substring(commentIndex) : null;
-
-    return _LineParts(
-      codePart: codePart,
-      comment: comment,
-      commentIndex: commentIndex,
-    );
-  }
-
-  void _processCodePart(
-    String codePart,
-    int commentIndex,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    _addLeadingWhitespace(codePart, style, spans);
-
-    final trimmedCode = codePart.trim();
-    final parts = trimmedCode.split(RegExp(r'\s+'));
-
-    if (parts.isNotEmpty && parts[0].isNotEmpty) {
-      _processInstruction(parts[0], style, spans);
-
-      if (parts.length > 1) {
-        _processInstructionWithOperand(
-          codePart,
-          parts,
-          commentIndex,
-          style,
-          spans,
-        );
-      } else {
-        _addTrailingWhitespaceAfterInstruction(
-          codePart,
-          parts[0],
-          style,
-          spans,
-        );
+      if (token.trim().isEmpty) {
+        spans.add(TextSpan(text: token, style: style));
+        continue;
       }
-    }
-  }
 
-  void _addLeadingWhitespace(
-    String codePart,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final leadingWhitespace = codePart.length - codePart.trimLeft().length;
-    if (leadingWhitespace > 0) {
-      spans.add(
-        TextSpan(text: codePart.substring(0, leadingWhitespace), style: style),
-      );
-    }
-  }
+      final first = token[0];
+      if (first == '"' || first == "'") {
+        color = stringColor;
+      } else if (RegExp(r'[A-Za-z_.]').hasMatch(first)) {
+        if (token.endsWith(':') && !seenToken) {
+          color = labelColor;
+        } else if (!seenKeyword) {
+          seenKeyword = true;
+          bold = true;
+          color = first == '.' ? directiveColor : _instructionColor(token);
+        } else {
+          color = symbolColor;
+        }
+      } else if (first == '#' || first == '-' || _isDigit(first)) {
+        color = _operandColor(token);
+      }
+      seenToken = true;
 
-  void _processInstruction(
-    String instructionText,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final instruction = instructionText.toUpperCase();
-    final color = _getInstructionColor(instruction);
-
-    spans.add(
-      TextSpan(
-        text: instructionText,
-        style: style?.copyWith(color: color, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Color? _getInstructionColor(String instruction) {
-    final opcode = Opcode.values.firstWhereOrNull(
-      (opcode) => opcode.mnemonic == instruction,
-    );
-
-    if (opcode == null) return null;
-
-    final highlightColor = opcode.highlightColor.color;
-    final alpha = opcode.highlightColor.alpha;
-    return highlightColor.withValues(alpha: alpha);
-  }
-
-  void _processInstructionWithOperand(
-    String codePart,
-    List<String> parts,
-    int commentIndex,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final instructionEnd = codePart.indexOf(parts[0]) + parts[0].length;
-    final operandStart = codePart.indexOf(parts[1], instructionEnd);
-
-    _addWhitespaceBetweenInstructionAndOperand(
-      codePart,
-      instructionEnd,
-      operandStart,
-      style,
-      spans,
-    );
-
-    final operandText = _extractOperandText(
-      codePart,
-      operandStart,
-      commentIndex,
-    );
-
-    _processOperand(operandText, style, spans);
-
-    _addTrailingWhitespaceBeforeComment(
-      codePart,
-      operandStart,
-      operandText,
-      commentIndex,
-      style,
-      spans,
-    );
-  }
-
-  void _addWhitespaceBetweenInstructionAndOperand(
-    String codePart,
-    int instructionEnd,
-    int operandStart,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    if (operandStart > instructionEnd) {
       spans.add(
         TextSpan(
-          text: codePart.substring(instructionEnd, operandStart),
-          style: style,
+          text: token,
+          style: style?.copyWith(
+            color: color,
+            fontWeight: bold ? FontWeight.bold : null,
+          ),
         ),
       );
     }
+
+    if (comment >= 0) {
+      spans.add(
+        TextSpan(
+          text: line.substring(comment),
+          style: style?.copyWith(
+            color: Colors.grey.shade500,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    return spans;
   }
 
-  String _extractOperandText(
-    String codePart,
-    int operandStart,
-    int commentIndex,
-  ) {
-    return codePart
-        .substring(
-          operandStart,
-          commentIndex >= 0 ? commentIndex : codePart.length,
-        )
-        .trimRight();
-  }
+  static bool _isDigit(String c) => '0123456789'.contains(c);
 
-  void _processOperand(
-    String operandText,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final color = _getOperandColor(operandText);
-
-    spans.add(
-      TextSpan(
-        text: operandText,
-        style: style?.copyWith(color: color),
-      ),
+  Color? _instructionColor(String word) {
+    final opcode = Opcode.values.firstWhereOrNull(
+      (opcode) => opcode.mnemonic == word.toUpperCase(),
+    );
+    if (opcode == null) return null;
+    return opcode.highlightColor.color.withValues(
+      alpha: opcode.highlightColor.alpha,
     );
   }
 
-  Color _getOperandColor(String operand) {
-    final highlightColor = _getOperandHighlightColor(operand);
-    final alpha = highlightColor.alpha;
-    return highlightColor.color.withValues(alpha: alpha);
-  }
-
-  OperandHighlightColor _getOperandHighlightColor(String operand) {
-    return OperandPrefix.values
+  Color _operandColor(String operand) {
+    final highlight =
+        OperandPrefix.values
             .firstWhereOrNull((e) => operand.startsWith(e.prefix))
             ?.highlightColor ??
         OperandHighlightColor.decimal;
+    return highlight.color.withValues(alpha: highlight.alpha);
   }
-
-  void _addTrailingWhitespaceBeforeComment(
-    String codePart,
-    int operandStart,
-    String operandText,
-    int commentIndex,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final operandEnd = operandStart + operandText.length;
-    if (commentIndex >= 0 && operandEnd < commentIndex) {
-      spans.add(TextSpan(text: codePart.substring(operandEnd), style: style));
-    } else if (commentIndex < 0 && operandEnd < codePart.length) {
-      spans.add(TextSpan(text: codePart.substring(operandEnd), style: style));
-    }
-  }
-
-  void _addTrailingWhitespaceAfterInstruction(
-    String codePart,
-    String instruction,
-    TextStyle? style,
-    List<TextSpan> spans,
-  ) {
-    final instructionEnd = codePart.indexOf(instruction) + instruction.length;
-    if (instructionEnd < codePart.length) {
-      spans.add(
-        TextSpan(text: codePart.substring(instructionEnd), style: style),
-      );
-    }
-  }
-
-  void _processComment(String comment, TextStyle? style, List<TextSpan> spans) {
-    spans.add(
-      TextSpan(
-        text: comment,
-        style: style?.copyWith(
-          color: Colors.grey.shade500,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-    );
-  }
-}
-
-class _LineParts {
-  final String codePart;
-  final String? comment;
-  final int commentIndex;
-
-  _LineParts({
-    required this.codePart,
-    required this.comment,
-    required this.commentIndex,
-  });
 }
