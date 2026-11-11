@@ -67,6 +67,9 @@ class _ProgramEditorState extends State<ProgramEditor> {
     return _assembly!.lineForAddress(address);
   }
 
+  // 0-based line of the last assembler error, shown in red in the gutter
+  int? _errorLine;
+
   // 0-based lines with a breakpoint
   final Set<int> _breakpointLines = {};
   int? _reportedCursorAddress;
@@ -98,10 +101,81 @@ class _ProgramEditorState extends State<ProgramEditor> {
     }
   }
 
-  void _toggleBreakpoint(int line) {
+  /// Whether [line] holds an instruction: not blank, comment, label-only,
+  /// or a directive such as `.db`.
+  bool _isInstructionLine(int line) {
     final lines = _editorController.text.split('\n');
-    final code = line < lines.length ? lines[line].split(';').first : '';
-    if (code.trim().isEmpty && !_breakpointLines.contains(line)) return;
+    if (line >= lines.length) return false;
+    var code = lines[line];
+    final comment = findCommentStart(code);
+    if (comment >= 0) code = code.substring(0, comment);
+    code = code.replaceFirst(RegExp(r'^\s*[A-Za-z_]\w*\s*:'), '').trim();
+    return code.isNotEmpty && !code.startsWith('.');
+  }
+
+  /// Address and bytes assembled from [line], for the listing column.
+  ({String text, String tooltip, bool isData})? _listingFor(int line) {
+    final assembly = _assembly;
+    if (!isAssembled || assembly == null) return null;
+    final addresses = assembly.addressesForLine(line);
+    if (addresses.isEmpty) return null;
+
+    String hex(int v, int width) =>
+        v.toRadixString(16).toUpperCase().padLeft(width, '0');
+    final bytes = [for (final a in addresses) hex(assembly.machineCode[a], 2)];
+    final first = addresses.first;
+    final range = addresses.length == 1
+        ? '0x${hex(first, 1)}'
+        : '0x${hex(first, 1)}-0x${hex(addresses.last, 1)}';
+    return (
+      text: '${hex(first, 1)} ${bytes.first}${bytes.length > 1 ? '+' : ''}',
+      tooltip: '$range: ${bytes.join(' ')}',
+      isData: assembly.dataAddresses.contains(first),
+    );
+  }
+
+  static const double _listingWidth = 46;
+
+  /// Listing column: address and first byte assembled from [line], e.g.
+  /// `3 4F`, with a `+` when a `.db` line fills several bytes.
+  Widget _listingCell(int line) {
+    final listing = _listingFor(line);
+    final cell = SizedBox(
+      width: _listingWidth,
+      child: listing == null
+          ? null
+          : Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: listing.text.substring(0, listing.text.indexOf(' ')),
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                  TextSpan(
+                    text: listing.text.substring(listing.text.indexOf(' ')),
+                    style: TextStyle(
+                      color: listing.isData
+                          ? AssemblyTextEditingController.stringColor
+                          : Colors.teal[200],
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11, height: 1.5 * 13 / 11),
+            ),
+    );
+    return listing == null
+        ? cell
+        : Tooltip(
+            message: listing.tooltip,
+            waitDuration: const Duration(milliseconds: 400),
+            child: cell,
+          );
+  }
+
+  void _toggleBreakpoint(int line) {
+    if (!_isInstructionLine(line) && !_breakpointLines.contains(line)) return;
     setState(() {
       if (!_breakpointLines.remove(line)) _breakpointLines.add(line);
     });
@@ -174,6 +248,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
       setState(() {
         isAssembled = true;
         _assembly = assembly;
+        _errorLine = null;
       });
       _errorMessageController.text =
           '[INFO] Assembled successfully!\n[INFO] See RAM\'s content in the CPU Board.';
@@ -184,6 +259,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
     } catch (e) {
       setState(() {
         isAssembled = false;
+        final line = e is AssemblerError ? e.line : null;
+        _errorLine = line == null ? null : line - 1;
       });
       _errorMessageController.text = '[ERROR] ${e.toString()}';
       _setLogTypeError();
@@ -205,6 +282,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
           onProgramSelected: (program) {
             setState(() {
               isAssembled = false;
+              _errorLine = null;
               _breakpointLines.clear();
             });
             _editorController.text = program.code;
@@ -235,17 +313,23 @@ class _ProgramEditorState extends State<ProgramEditor> {
     const hintText =
         'Enter assembly code here...\n\n'
         'Example:\n'
-        'LDI #5     ; Load immediate\n'
-        'STA 0xF    ; Store to hex addr\n'
-        'OUT        ; Output value\n'
-        'HLT        ; Halt execution';
+        '.equ STEP 1     ; named constant\n'
+        'loop: LDA n     ; label\n'
+        '      OUT\n'
+        '      SUB step\n'
+        '      STA n\n'
+        '      JZ  done\n'
+        '      JMP loop\n'
+        'done: HLT\n'
+        'n:    .db 5     ; data byte\n'
+        'step: .db STEP';
 
     final highlightedLine = _highlightedLine;
     // Picked up by buildTextSpan when the TextField below rebuilds.
     _editorController.highlightedLine = highlightedLine;
 
     return Container(
-      width: 400,
+      width: 460,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1a1a1a),
@@ -323,7 +407,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: _lineCount > 99 ? 44 : 34,
+                  width: (_lineCount > 99 ? 44 : 34) + _listingWidth,
                   height: 455,
                   padding: const EdgeInsets.symmetric(
                     vertical: 8,
@@ -366,7 +450,14 @@ class _ProgramEditorState extends State<ProgramEditor> {
                                     child: Text(
                                       '${index + 1}',
                                       textAlign: TextAlign.right,
-                                      style: index == highlightedLine
+                                      style: index == _errorLine
+                                          ? const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.red,
+                                              fontWeight: FontWeight.bold,
+                                              height: 1.5,
+                                            )
+                                          : index == highlightedLine
                                           ? const TextStyle(
                                               fontSize: 13,
                                               color: Colors.amber,
@@ -380,6 +471,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
                                             ),
                                     ),
                                   ),
+                                  _listingCell(index),
                                 ],
                               ),
                             ),
@@ -412,6 +504,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
                         _updateLineCount();
                         setState(() {
                           isAssembled = false;
+                          _errorLine = null;
                           _breakpointLines.removeWhere(
                             (line) => line >= _lineCount,
                           );

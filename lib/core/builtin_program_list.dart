@@ -159,6 +159,27 @@ JZ 0xA       ; Jump to halt, if 0
 JMP 0x4      ; Loop
 HLT          ; Halt''',
     ),
+
+    BuiltinProgram(
+      name: 'Countdown (labels & data)',
+      description:
+          'The countdown again, with labels, a constant and data bytes '
+          'instead of raw addresses',
+      category: BuiltinProgramCategory.controlFlow,
+      code: '''; Labels replace raw addresses
+.equ START 10      ; Named constant
+
+loop:  LDA count   ; Load counter
+       OUT         ; Show it
+       SUB one     ; Subtract 1
+       STA count   ; Store it back
+       JZ  done    ; Stop at 0
+       JMP loop    ; Repeat
+done:  HLT         ; Halt
+
+count: .db START   ; Counter byte
+one:   .db 1       ; Constant 1''',
+    ),
   ];
 
   static const List<BuiltinProgram> patternsPrograms = [
