@@ -53,6 +53,37 @@ class ClockModule extends StatelessWidget {
   final ValueChanged<double> onSpeedChanged;
   final ValueChanged<bool> onModeChanged;
 
+  /// Undo the last step; null when there is nothing to undo.
+  final VoidCallback? onStepBack;
+
+  /// Run to the editor cursor line; null when it holds no instruction.
+  final VoidCallback? onRunToCursor;
+
+  Widget _button(
+    IconData icon,
+    String label,
+    VoidCallback? onPressed,
+    String tooltip,
+  ) {
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 600),
+      child: Column(
+        children: [
+          _HardwareButton(icon: icon, onPressed: onPressed),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: onPressed == null ? Colors.grey[700] : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   const ClockModule({
     super.key,
     required this.clockHigh,
@@ -65,6 +96,8 @@ class ClockModule extends StatelessWidget {
     required this.onReset,
     required this.onSpeedChanged,
     required this.onModeChanged,
+    this.onStepBack,
+    this.onRunToCursor,
   });
 
   @override
@@ -157,58 +190,48 @@ class ClockModule extends StatelessWidget {
             ),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (!manualMode)
-                Column(
-                  children: [
-                    _HardwareButton(
-                      icon: isRunning
-                          ? FluentIcons.pause_24_regular
-                          : FluentIcons.play_24_regular,
-                      onPressed: onToggle,
-                    ),
-                    const SizedBox(height: 8),
-                    if (isRunning)
-                      const Text('Pause', style: TextStyle(fontSize: 12))
-                    else
-                      const Text('Run', style: TextStyle(fontSize: 12)),
-                  ],
+              if (!manualMode) ...[
+                _button(
+                  isRunning
+                      ? FluentIcons.pause_24_regular
+                      : FluentIcons.play_24_regular,
+                  isRunning ? 'Pause' : 'Run',
+                  onToggle,
+                  'Run until a breakpoint or HLT',
                 ),
-              if (manualMode)
-                Column(
-                  children: [
-                    _HardwareButton(
-                      icon: FluentIcons.arrow_step_in_right_24_regular,
-                      onPressed: onStep,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('Step', style: TextStyle(fontSize: 12)),
-                  ],
+                _button(
+                  FluentIcons.cursor_24_regular,
+                  'Cursor',
+                  onRunToCursor,
+                  'Run until the instruction on the editor cursor line',
                 ),
-              if (manualMode)
-                Tooltip(
-                  message: 'Run the rest of the current instruction',
-                  child: Column(
-                    children: [
-                      _HardwareButton(
-                        icon: FluentIcons.arrow_next_24_regular,
-                        onPressed: onInstructionStep,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Instr', style: TextStyle(fontSize: 12)),
-                    ],
-                  ),
+              ] else ...[
+                _button(
+                  FluentIcons.arrow_undo_24_regular,
+                  'Back',
+                  onStepBack,
+                  'Undo the last step',
                 ),
-              Column(
-                children: [
-                  _HardwareButton(
-                    icon: FluentIcons.arrow_clockwise_24_regular,
-                    onPressed: onReset,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Reset', style: TextStyle(fontSize: 12)),
-                ],
+                _button(
+                  FluentIcons.arrow_step_in_right_24_regular,
+                  'Step',
+                  onStep,
+                  'One clock cycle (micro-step)',
+                ),
+                _button(
+                  FluentIcons.arrow_next_24_regular,
+                  'Instr',
+                  onInstructionStep,
+                  'Run the rest of the current instruction',
+                ),
+              ],
+              _button(
+                FluentIcons.arrow_clockwise_24_regular,
+                'Reset',
+                onReset,
+                'Restart the loaded program',
               ),
               Column(
                 children: [
@@ -216,8 +239,8 @@ class ClockModule extends StatelessWidget {
                     value: manualMode,
                     onChanged: onModeChanged,
                   ),
-                  const SizedBox(height: 10),
-                  const Text('Manual', style: TextStyle(fontSize: 12)),
+                  const SizedBox(height: 8),
+                  const Text('Manual', style: TextStyle(fontSize: 11)),
                 ],
               ),
             ],
@@ -230,7 +253,9 @@ class ClockModule extends StatelessWidget {
 
 class _HardwareButton extends StatefulWidget {
   final IconData icon;
-  final VoidCallback onPressed;
+
+  /// Null disables the button.
+  final VoidCallback? onPressed;
 
   const _HardwareButton({required this.icon, required this.onPressed});
 
@@ -243,17 +268,20 @@ class _HardwareButtonState extends State<_HardwareButton> {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
     return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onPressed();
-      },
-      onTapCancel: () => setState(() => _isPressed = false),
+      onTapDown: enabled ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: enabled
+          ? (_) {
+              setState(() => _isPressed = false);
+              widget.onPressed!();
+            }
+          : null,
+      onTapCancel: enabled ? () => setState(() => _isPressed = false) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: _isPressed ? Colors.grey[900] : Colors.grey[850],
@@ -278,8 +306,12 @@ class _HardwareButtonState extends State<_HardwareButton> {
         ),
         child: Icon(
           widget.icon,
-          color: _isPressed ? Colors.red : Colors.red.withValues(alpha: 0.9),
-          size: 24,
+          color: !enabled
+              ? Colors.grey[700]
+              : _isPressed
+              ? Colors.red
+              : Colors.red.withValues(alpha: 0.9),
+          size: 20,
         ),
       ),
     );
@@ -299,8 +331,8 @@ class _HardwareToggleSwitch extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: Colors.grey[850],
