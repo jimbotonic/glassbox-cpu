@@ -1,8 +1,26 @@
 import 'opcode.dart';
 
+/// Machine code plus, for each address, the 0-based source line it came from.
+class AssemblyResult {
+  final List<int> machineCode;
+  final List<int> sourceLines;
+
+  const AssemblyResult(this.machineCode, this.sourceLines);
+
+  /// Source line of the instruction at [address], or null if there is none.
+  int? lineForAddress(int address) =>
+      address >= 0 && address < sourceLines.length
+      ? sourceLines[address]
+      : null;
+}
+
 class Assembler {
-  List<int> assemble(String source) {
+  List<int> assemble(String source) =>
+      assembleWithSourceMap(source).machineCode;
+
+  AssemblyResult assembleWithSourceMap(String source) {
     final List<int> machineCode = [];
+    final List<int> sourceLines = [];
     final lines = _splitIntoLines(source);
 
     for (int i = 0; i < lines.length; i++) {
@@ -29,10 +47,11 @@ class Assembler {
       );
 
       machineCode.add(machineCodeInstruction);
+      sourceLines.add(i);
     }
 
     _validateMachineCode(machineCode);
-    return machineCode;
+    return AssemblyResult(machineCode, sourceLines);
   }
 
   List<String> _splitIntoLines(String source) {
