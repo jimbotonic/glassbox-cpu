@@ -10,10 +10,15 @@ class ProgramEditor extends StatefulWidget {
   final Function(List<int> program, bool hasError) onAssemble;
   final String? initialProgram;
 
+  /// RAM address of the instruction being executed; its source line is
+  /// highlighted while the editor text matches the assembled program.
+  final int? currentAddress;
+
   const ProgramEditor({
     super.key,
     required this.onAssemble,
     this.initialProgram,
+    this.currentAddress,
   });
 
   @override
@@ -36,6 +41,17 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
   bool isAssembled = false;
   int _lineCount = 1;
+
+  // Source map of the last successful assembly (address -> source line)
+  AssemblyResult? _assembly;
+
+  /// Source line to highlight, or null when the text no longer matches the
+  /// assembled program.
+  int? get _highlightedLine {
+    final address = widget.currentAddress;
+    if (!isAssembled || _assembly == null || address == null) return null;
+    return _assembly!.lineForAddress(address);
+  }
 
   @override
   void initState() {
@@ -97,9 +113,11 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
   void _assembleProgram() {
     try {
-      final program = _assembler.assemble(_editorController.text);
+      final assembly = _assembler.assembleWithSourceMap(_editorController.text);
+      final program = assembly.machineCode;
       setState(() {
         isAssembled = true;
+        _assembly = assembly;
       });
       _errorMessageController.text =
           '[INFO] Assembled successfully!\n[INFO] See RAM\'s content in the CPU Board.';
@@ -159,6 +177,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
         'STA 0xF    ; Store to hex addr\n'
         'OUT        ; Output value\n'
         'HLT        ; Halt execution';
+
+    final highlightedLine = _highlightedLine;
+    // Picked up by buildTextSpan when the TextField below rebuilds.
+    _editorController.highlightedLine = highlightedLine;
 
     return Container(
       width: 400,
@@ -255,11 +277,18 @@ class _ProgramEditorState extends State<ProgramEditor> {
                           _lineCount,
                           (index) => Text(
                             '${index + 1}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[600],
-                              height: 1.5,
-                            ),
+                            style: index == highlightedLine
+                                ? const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.amber,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.5,
+                                  )
+                                : TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey[600],
+                                    height: 1.5,
+                                  ),
                           ),
                         ),
                       ),

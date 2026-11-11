@@ -70,6 +70,9 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   // Microcode step
   int microStep = 0;
 
+  // RAM address of the instruction being executed, latched at each fetch (T0)
+  int instructionAddress = 0;
+
   // Control word
   int controlWord = 0;
 
@@ -151,7 +154,9 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     });
   }
 
-  void _onClockSingleStep() {
+  /// Manual step: one micro-step (clock cycle), or with [wholeInstruction]
+  /// every remaining micro-step of the current instruction.
+  void _onClockSingleStep({bool wholeInstruction = false}) {
     // Ignore presses while the previous step is still pending, otherwise a
     // double press runs two steps back to back.
     if (haltFlag || singleStepTimer != null) return;
@@ -164,9 +169,23 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         clockHigh = false;
-        _executeStep();
+        if (wholeInstruction) {
+          _executeInstructionSteps();
+        } else {
+          _executeStep();
+        }
       });
     });
+  }
+
+  /// Runs micro-steps until the instruction completes (the step counter
+  /// wraps back to T0). Starting from T0, this runs a full fetch + execute.
+  void _executeInstructionSteps() {
+    // Longest instruction is 5 micro-steps; the cap guards against a loop.
+    for (int i = 0; i < 8; i++) {
+      _executeStep();
+      if (microStep == 0 || haltFlag) break;
+    }
   }
 
   void _executeStep() {
@@ -175,6 +194,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     // T0 and T1 are always the same (fetch cycle)
     if (microStep == 0) {
       // T0: MAR <- PC
+      instructionAddress = programCounter;
       controlWord = ControlWord.co.hex | ControlWord.mi.hex; // CO|MI
       _decodeControlWord(controlWord);
       bus = programCounter;
@@ -447,6 +467,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
       clockHigh = false;
       haltFlag = false;
       microStep = 0;
+      instructionAddress = 0;
       controlWord = 0;
 
       _onClearControlSignals();
@@ -512,6 +533,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
 
         // ? Microcode step
         microStep: microStep,
+        instructionAddress: instructionAddress,
 
         // ? Control word
         controlWord: controlWord,
@@ -519,6 +541,8 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
         // ? Clock
         onClockToggle: _onClockToggle,
         onClockSingleStep: _onClockSingleStep,
+        onClockInstructionStep: () =>
+            _onClockSingleStep(wholeInstruction: true),
         onClockSpeedChanged: (speed) {
           setState(() {
             clockSpeed = speed;
