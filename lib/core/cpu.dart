@@ -44,6 +44,9 @@ class Cpu {
   /// Control word applied by the last [tick].
   int controlWord = 0;
 
+  /// Micro-step the last [tick] executed, or null if none since reset.
+  int? executedStep;
+
   /// RAM address of the instruction being executed, latched at T0.
   int instructionAddress = 0;
 
@@ -72,6 +75,7 @@ class Cpu {
     halted = false;
     microStep = 0;
     controlWord = 0;
+    executedStep = null;
     instructionAddress = 0;
 
     ram.fillRange(0, ramSize, 0);
@@ -103,8 +107,37 @@ class Cpu {
       zero: zeroFlag,
     );
     _apply(controlWord);
+    executedStep = step;
 
     microStep = (stepCount != null && step + 1 >= stepCount) ? 0 : step + 1;
+  }
+
+  /// True when the next [tick] starts a new instruction (T0) at
+  /// [programCounter]; used for breakpoints and run-to-cursor.
+  bool get atInstructionStart => microStep == 0 && !halted;
+
+  /// Copy of the whole machine state, for step-back.
+  CpuSnapshot snapshot() => CpuSnapshot._(this);
+
+  /// Puts the machine back in the state captured by [snapshot].
+  void restore(CpuSnapshot s) {
+    ram.setAll(0, s._ram);
+    bus = s._bus;
+    busActive = s._busActive;
+    registerA = s._registerA;
+    registerB = s._registerB;
+    instructionRegister = s._instructionRegister;
+    memoryAddressRegister = s._memoryAddressRegister;
+    programCounter = s._programCounter;
+    outputRegister = s._outputRegister;
+    sumRegister = s._sumRegister;
+    carryFlag = s._carryFlag;
+    zeroFlag = s._zeroFlag;
+    halted = s._halted;
+    microStep = s._microStep;
+    controlWord = s._controlWord;
+    executedStep = s._executedStep;
+    instructionAddress = s._instructionAddress;
   }
 
   /// Runs the remaining micro-steps of the current instruction; from T0
@@ -173,4 +206,44 @@ class Cpu {
     }
     if (on(ControlWord.hlt)) halted = true;
   }
+}
+
+/// Immutable copy of a [Cpu]'s state (the loaded program is not included).
+class CpuSnapshot {
+  CpuSnapshot._(Cpu cpu)
+    : _ram = List.unmodifiable(cpu.ram),
+      _bus = cpu.bus,
+      _busActive = cpu.busActive,
+      _registerA = cpu.registerA,
+      _registerB = cpu.registerB,
+      _instructionRegister = cpu.instructionRegister,
+      _memoryAddressRegister = cpu.memoryAddressRegister,
+      _programCounter = cpu.programCounter,
+      _outputRegister = cpu.outputRegister,
+      _sumRegister = cpu.sumRegister,
+      _carryFlag = cpu.carryFlag,
+      _zeroFlag = cpu.zeroFlag,
+      _halted = cpu.halted,
+      _microStep = cpu.microStep,
+      _controlWord = cpu.controlWord,
+      _executedStep = cpu.executedStep,
+      _instructionAddress = cpu.instructionAddress;
+
+  final List<int> _ram;
+  final int _bus;
+  final bool _busActive;
+  final int _registerA;
+  final int _registerB;
+  final int _instructionRegister;
+  final int _memoryAddressRegister;
+  final int _programCounter;
+  final int _outputRegister;
+  final int _sumRegister;
+  final bool _carryFlag;
+  final bool _zeroFlag;
+  final bool _halted;
+  final int _microStep;
+  final int _controlWord;
+  final int? _executedStep;
+  final int _instructionAddress;
 }
