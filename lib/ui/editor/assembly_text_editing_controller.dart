@@ -7,6 +7,13 @@ import '../../core/operand.dart';
 class AssemblyTextEditingController extends TextEditingController {
   AssemblyTextEditingController({super.text});
 
+  static const Color highlightColor = Color(0x55FFC107); // translucent amber
+
+  /// 0-based line drawn with a highlight background (the instruction being
+  /// executed), or null. Read in [buildTextSpan], so the owning widget must
+  /// rebuild the TextField after changing it.
+  int? highlightedLine;
+
   @override
   set value(TextEditingValue newValue) {
     final normalizedText = _normalizeOpcodes(newValue.text);
@@ -71,7 +78,19 @@ class AssemblyTextEditingController extends TextEditingController {
     final List<TextSpan> spans = [];
 
     for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      _processLine(lines[lineIndex], style, spans);
+      if (lineIndex == highlightedLine) {
+        // Child spans inherit the background from this parent span.
+        final List<TextSpan> lineSpans = [];
+        _processLine(lines[lineIndex], style, lineSpans);
+        spans.add(
+          TextSpan(
+            style: const TextStyle(backgroundColor: highlightColor),
+            children: lineSpans,
+          ),
+        );
+      } else {
+        _processLine(lines[lineIndex], style, spans);
+      }
 
       if (lineIndex < lines.length - 1) {
         spans.add(TextSpan(text: '\n', style: style));
