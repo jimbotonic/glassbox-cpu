@@ -70,6 +70,7 @@ class CPULayout extends StatelessWidget {
 
   // Microcode step
   final int microStep;
+  final int instructionAddress;
 
   // Control word
   final int controlWord;
@@ -77,6 +78,7 @@ class CPULayout extends StatelessWidget {
   // Clock
   final void Function() onClockToggle;
   final void Function() onClockSingleStep;
+  final void Function() onClockInstructionStep;
   final void Function(double speed) onClockSpeedChanged;
   final void Function(bool manual) onClockManualModeChanged;
 
@@ -141,6 +143,7 @@ class CPULayout extends StatelessWidget {
 
     // Microcode step
     required this.microStep,
+    required this.instructionAddress,
 
     // Control word
     required this.controlWord,
@@ -148,6 +151,7 @@ class CPULayout extends StatelessWidget {
     // Clock
     required this.onClockToggle,
     required this.onClockSingleStep,
+    required this.onClockInstructionStep,
     required this.onClockSpeedChanged,
     required this.onClockManualModeChanged,
 
@@ -236,6 +240,7 @@ class CPULayout extends StatelessWidget {
                           manualMode: manualMode,
                           onToggle: onClockToggle,
                           onStep: onClockSingleStep,
+                          onInstructionStep: onClockInstructionStep,
                           onReset: onReset,
                           onSpeedChanged: onClockSpeedChanged,
                           onModeChanged: onClockManualModeChanged,
@@ -339,6 +344,7 @@ class CPULayout extends StatelessWidget {
                     const SizedBox(width: spaceBetweenModules),
                     ProgramEditor(
                       initialProgram: initialProgram,
+                      currentAddress: instructionAddress,
                       onAssemble: (program, hasError) {
                         if (!hasError && program.isNotEmpty) {
                           onReset();

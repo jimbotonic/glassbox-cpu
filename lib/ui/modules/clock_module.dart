@@ -10,7 +10,19 @@ import '../painters/shapes/hardware_track_shape.dart';
 class ClockModule extends StatelessWidget {
   /// Selectable clock speeds in Hz, on a 1-2-5 log scale.
   static const List<double> speeds = [
-    0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    0.25,
+    0.5,
+    1,
+    2,
+    5,
+    10,
+    20,
+    50,
+    100,
+    200,
+    500,
+    1000,
+  ];
 
   /// Index into [speeds] closest to [hz], measured on a log scale.
   static int _speedIndex(double hz) {
@@ -36,6 +48,7 @@ class ClockModule extends StatelessWidget {
   final bool manualMode;
   final VoidCallback onToggle;
   final VoidCallback onStep;
+  final VoidCallback onInstructionStep;
   final VoidCallback onReset;
   final ValueChanged<double> onSpeedChanged;
   final ValueChanged<bool> onModeChanged;
@@ -48,6 +61,7 @@ class ClockModule extends StatelessWidget {
     required this.manualMode,
     required this.onToggle,
     required this.onStep,
+    required this.onInstructionStep,
     required this.onReset,
     required this.onSpeedChanged,
     required this.onModeChanged,
@@ -171,6 +185,20 @@ class ClockModule extends StatelessWidget {
                     const SizedBox(height: 8),
                     const Text('Step', style: TextStyle(fontSize: 12)),
                   ],
+                ),
+              if (manualMode)
+                Tooltip(
+                  message: 'Run the rest of the current instruction',
+                  child: Column(
+                    children: [
+                      _HardwareButton(
+                        icon: FluentIcons.arrow_next_24_regular,
+                        onPressed: onInstructionStep,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('Instr', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
                 ),
               Column(
                 children: [
