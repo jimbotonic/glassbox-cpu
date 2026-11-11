@@ -58,6 +58,12 @@ void main() {
       expect(result.halted, isTrue);
     });
 
+    test('Countdown (labels & data) matches the raw-address version', () {
+      final result = runProgram('Countdown (labels & data)');
+      expect(result.outputs, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      expect(result.halted, isTrue);
+    });
+
     test('Even Numbers outputs 0..254, then halts', () {
       final result = runProgram('Even Numbers');
       expect(result.outputs, List.generate(128, (i) => i * 2));

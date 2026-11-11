@@ -45,6 +45,8 @@ class InstructionSetDialog extends StatelessWidget {
                   _buildOperandTypesSection(),
                   const SizedBox(height: 20),
                   _buildInstructionsSection(),
+                  const SizedBox(height: 20),
+                  const _SyntaxSection(),
                 ],
               ),
             ),
@@ -508,6 +510,100 @@ class _OperandTypeCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Labels, `.equ` constants and `.db` data, with a worked example.
+class _SyntaxSection extends StatelessWidget {
+  const _SyntaxSection();
+
+  static const _example =
+      '.equ STEP 1       ; constant: a name for a number\n'
+      'loop: LDA n       ; label: a name for an address\n'
+      '      OUT\n'
+      '      SUB step    ; names work wherever a number does\n'
+      '      STA n\n'
+      '      JZ  done    ; jump forward to a label\n'
+      '      JMP loop\n'
+      'done: HLT\n'
+      'n:    .db 5       ; data: one byte per value\n'
+      'step: .db STEP';
+
+  static const _rules = [
+    ('label:', 'Names the address of the next byte. Use it as an operand.'),
+    ('.equ NAME value', 'Defines a constant. Takes no space in RAM.'),
+    (
+      '.db 1, 0x2A, \'A\', "HI"',
+      'Places bytes (0-255) in RAM: numbers, characters, strings, labels.',
+    ),
+    ('0x1F  0b101  \'A\'', 'Hex, binary and character literals.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'LABELS, CONSTANTS & DATA',
+          style: TextStyle(
+            color: Colors.amber,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final (syntax, meaning) in _rules)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 170,
+                  child: Text(
+                    syntax,
+                    style: const TextStyle(
+                      color: Color(0xFF4EC9B0),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    meaning,
+                    style: TextStyle(color: Colors.grey[300], fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Text(
+            _example,
+            style: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 11,
+              height: 1.4,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'The gutter lists each line\'s address and assembled byte after '
+          'ASSEMBLE & LOAD. Names are not case-sensitive.',
+          style: TextStyle(color: Colors.grey[500], fontSize: 10),
+        ),
+      ],
     );
   }
 }
