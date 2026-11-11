@@ -14,11 +14,25 @@ class ProgramEditor extends StatefulWidget {
   /// highlighted while the editor text matches the assembled program.
   final int? currentAddress;
 
+  /// Addresses of the instructions on breakpoint lines, reported whenever
+  /// breakpoints or the assembled program change.
+  final ValueChanged<Set<int>>? onBreakpointsChanged;
+
+  /// Address of the instruction on the cursor line, or null, reported when
+  /// it changes; used for run-to-cursor.
+  final ValueChanged<int?>? onCursorAddressChanged;
+
+  /// Extra buttons shown in the header, next to the status icon.
+  final List<Widget> headerActions;
+
   const ProgramEditor({
     super.key,
     required this.onAssemble,
     this.initialProgram,
     this.currentAddress,
+    this.onBreakpointsChanged,
+    this.onCursorAddressChanged,
+    this.headerActions = const [],
   });
 
   @override
@@ -53,12 +67,54 @@ class _ProgramEditorState extends State<ProgramEditor> {
     return _assembly!.lineForAddress(address);
   }
 
+  // 0-based lines with a breakpoint
+  final Set<int> _breakpointLines = {};
+  int? _reportedCursorAddress;
+
+  /// Instruction address for [line] in the current assembly, or null.
+  int? _addressForLine(int line) =>
+      isAssembled ? _assembly?.addressForLine(line) : null;
+
+  void _reportBreakpoints() {
+    widget.onBreakpointsChanged?.call({
+      for (final line in _breakpointLines) ?_addressForLine(line),
+    });
+  }
+
+  void _reportCursor() {
+    final offset = _editorController.selection.baseOffset;
+    final text = _editorController.text;
+    int? address;
+    if (offset >= 0 && offset <= text.length) {
+      final line = '\n'.allMatches(text.substring(0, offset)).length;
+      address = _addressForLine(line);
+    }
+    if (address != _reportedCursorAddress) {
+      _reportedCursorAddress = address;
+      // Controller listeners can fire while the tree builds; report after.
+      Future.microtask(() {
+        if (mounted) widget.onCursorAddressChanged?.call(address);
+      });
+    }
+  }
+
+  void _toggleBreakpoint(int line) {
+    final lines = _editorController.text.split('\n');
+    final code = line < lines.length ? lines[line].split(';').first : '';
+    if (code.trim().isEmpty && !_breakpointLines.contains(line)) return;
+    setState(() {
+      if (!_breakpointLines.remove(line)) _breakpointLines.add(line);
+    });
+    _reportBreakpoints();
+  }
+
   @override
   void initState() {
     super.initState();
     _editorController = AssemblyTextEditingController(
       text: widget.initialProgram ?? '',
     );
+    _editorController.addListener(_reportCursor);
     _errorMessageController = TextEditingController(
       text: '[NORMAL] Initialized!',
     );
@@ -123,6 +179,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
           '[INFO] Assembled successfully!\n[INFO] See RAM\'s content in the CPU Board.';
       _setLogTypeInfo();
       widget.onAssemble(program, false);
+      _reportBreakpoints();
+      _reportCursor();
     } catch (e) {
       setState(() {
         isAssembled = false;
@@ -130,6 +188,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
       _errorMessageController.text = '[ERROR] ${e.toString()}';
       _setLogTypeError();
       widget.onAssemble([], true);
+      _reportBreakpoints();
+      _reportCursor();
     }
   }
 
@@ -143,11 +203,13 @@ class _ProgramEditorState extends State<ProgramEditor> {
           programs: _programs,
           categories: _categories,
           onProgramSelected: (program) {
-            _editorController.text = program.code;
-            _updateLineCount();
             setState(() {
               isAssembled = false;
+              _breakpointLines.clear();
             });
+            _editorController.text = program.code;
+            _updateLineCount();
+            _reportBreakpoints();
             _errorMessageController.text =
                 '[NORMAL] Program loaded successfully!';
             _setLogTypeNormal();
@@ -199,6 +261,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -227,18 +290,24 @@ class _ProgramEditorState extends State<ProgramEditor> {
                 ],
               ),
 
-              Icon(
-                _isLogTypeError
-                    ? Icons.error
-                    : isAssembled
-                    ? Icons.check_circle
-                    : Icons.code,
-                color: _isLogTypeError
-                    ? Colors.red
-                    : isAssembled
-                    ? Colors.green
-                    : Colors.blue,
-                size: 16,
+              Row(
+                children: [
+                  ...widget.headerActions,
+                  const SizedBox(width: 6),
+                  Icon(
+                    _isLogTypeError
+                        ? Icons.error
+                        : isAssembled
+                        ? Icons.check_circle
+                        : Icons.code,
+                    color: _isLogTypeError
+                        ? Colors.red
+                        : isAssembled
+                        ? Colors.green
+                        : Colors.blue,
+                    size: 16,
+                  ),
+                ],
               ),
             ],
           ),
@@ -254,7 +323,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: _lineCount > 99 ? 36 : 26,
+                  width: _lineCount > 99 ? 44 : 34,
                   height: 455,
                   padding: const EdgeInsets.symmetric(
                     vertical: 8,
@@ -275,20 +344,45 @@ class _ProgramEditorState extends State<ProgramEditor> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: List.generate(
                           _lineCount,
-                          (index) => Text(
-                            '${index + 1}',
-                            style: index == highlightedLine
-                                ? const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.amber,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.5,
-                                  )
-                                : TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey[600],
-                                    height: 1.5,
+                          (index) => GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _toggleBreakpoint(index),
+                            child: Tooltip(
+                              message: 'Toggle breakpoint',
+                              waitDuration: const Duration(seconds: 1),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _breakpointLines.contains(index)
+                                          ? Colors.red
+                                          : Colors.transparent,
+                                    ),
                                   ),
+                                  Expanded(
+                                    child: Text(
+                                      '${index + 1}',
+                                      textAlign: TextAlign.right,
+                                      style: index == highlightedLine
+                                          ? const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.amber,
+                                              fontWeight: FontWeight.bold,
+                                              height: 1.5,
+                                            )
+                                          : TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[600],
+                                              height: 1.5,
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -318,7 +412,12 @@ class _ProgramEditorState extends State<ProgramEditor> {
                         _updateLineCount();
                         setState(() {
                           isAssembled = false;
+                          _breakpointLines.removeWhere(
+                            (line) => line >= _lineCount,
+                          );
                         });
+                        _reportBreakpoints();
+                        _reportCursor();
                         _errorMessageController.text =
                             '[NORMAL] Program modified!\n[NORMAL] Please assemble again.';
                         _setLogTypeNormal();

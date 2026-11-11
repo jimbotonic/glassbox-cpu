@@ -12,6 +12,13 @@ class AssemblyResult {
       address >= 0 && address < sourceLines.length
       ? sourceLines[address]
       : null;
+
+  /// Address of the instruction on source [line], or null if that line
+  /// holds no instruction.
+  int? addressForLine(int line) {
+    final address = sourceLines.indexOf(line);
+    return address < 0 ? null : address;
+  }
 }
 
 class Assembler {
