@@ -1,222 +1,148 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import 'core/control_signal.dart';
+import 'core/control_word.dart';
+import 'core/cpu.dart';
+import 'core/step_info.dart';
+import 'ui/about_dialog.dart';
 import 'ui/editor/code_editor.dart';
 import 'ui/modules/alu_module.dart';
 import 'ui/modules/bus_module.dart';
 import 'ui/modules/clock_module.dart';
-import 'ui/modules/control_unit_module.dart';
-import 'ui/modules/control_word_module.dart';
 import 'ui/modules/flags_module.dart';
 import 'ui/modules/instruction_register_module.dart';
+import 'ui/modules/microcode_module.dart';
 import 'ui/modules/output_module.dart';
 import 'ui/modules/program_counter_module.dart';
 import 'ui/modules/ram_module.dart';
 import 'ui/modules/register_module.dart';
+import 'ui/modules/step_caption_module.dart';
+import 'ui/painters/bus_arrow_painter.dart';
 import 'ui/painters/grid_painter.dart';
 
+/// Lays out the board's modules around the [Cpu] state and draws the bus
+/// transfer of the last step as an arrow over them.
 class CPULayout extends StatelessWidget {
+  final Cpu cpu;
   final String? initialProgram;
 
-  // Bus
-  final int bus;
-  final bool busActive;
-
-  // Registers
-  final int registerA;
-  final int registerB;
-  final int instructionRegister;
-  final int memoryAddressRegister;
-  final int programCounter;
-  final int outputRegister;
-  final int sumRegister;
-
-  // Flags
-  final bool carryFlag;
-  final bool zeroFlag;
-
-  // Control signals
-  final bool clockHigh;
-  final bool haltFlag;
-  final bool memoryIn;
-  final bool ramIn;
-  final bool ramOut;
-  final bool instructionOut;
-  final bool instructionIn;
-  final bool aRegisterIn;
-  final bool aRegisterOut;
-  final bool bRegisterIn;
-  final bool sumOut;
-  final bool subtract;
-  final bool outputIn;
-  final bool counterEnable;
-  final bool counterOut;
-  final bool jump;
-  final bool flagsIn;
-
-  // RAM
-  final List<int> ram;
-
   // Clock
+  final bool clockHigh;
   final bool isRunning;
   final double clockSpeed;
   final bool manualMode;
 
-  // Animation
+  // View
+  final bool detailedView;
   final Animation<double> busAnimation;
 
-  // Microcode step
-  final int microStep;
-  final int instructionAddress;
+  /// RAM address whose source line the editor highlights.
+  final int highlightAddress;
 
-  // Control word
-  final int controlWord;
+  // Clock controls
+  final VoidCallback onClockToggle;
+  final VoidCallback onClockSingleStep;
+  final VoidCallback onClockInstructionStep;
+  final VoidCallback? onStepBack;
+  final VoidCallback? onRunToCursor;
+  final ValueChanged<double> onClockSpeedChanged;
+  final ValueChanged<bool> onClockManualModeChanged;
+  final VoidCallback onReset;
 
-  // Clock
-  final void Function() onClockToggle;
-  final void Function() onClockSingleStep;
-  final void Function() onClockInstructionStep;
-  final void Function(double speed) onClockSpeedChanged;
-  final void Function(bool manual) onClockManualModeChanged;
+  // View controls
+  final ValueChanged<bool> onDetailedViewChanged;
 
-  // RAM
+  // Program
   final void Function(int address, int value) onRamEdit;
-
-  // CPU
-  final void Function() onReset;
-  final void Function() onClearControlSignals;
   final void Function(List<int> program) onLoadProgram;
+  final ValueChanged<Set<int>> onBreakpointsChanged;
+  final ValueChanged<int?> onCursorAddressChanged;
 
   const CPULayout({
     super.key,
+    required this.cpu,
     this.initialProgram,
-
-    // Bus
-    required this.bus,
-    required this.busActive,
-
-    // Registers
-    required this.registerA,
-    required this.registerB,
-    required this.instructionRegister,
-    required this.memoryAddressRegister,
-    required this.programCounter,
-    required this.outputRegister,
-    required this.sumRegister,
-
-    // Flags
-    required this.carryFlag,
-    required this.zeroFlag,
-
-    // Control signals
     required this.clockHigh,
-    required this.haltFlag,
-    required this.memoryIn,
-    required this.ramIn,
-    required this.ramOut,
-    required this.instructionOut,
-    required this.instructionIn,
-    required this.aRegisterIn,
-    required this.aRegisterOut,
-    required this.bRegisterIn,
-    required this.sumOut,
-    required this.subtract,
-    required this.outputIn,
-    required this.counterEnable,
-    required this.counterOut,
-    required this.jump,
-    required this.flagsIn,
-
-    // RAM
-    required this.ram,
-
-    // Clock
     required this.isRunning,
     required this.clockSpeed,
     required this.manualMode,
-
-    // Animation
+    required this.detailedView,
     required this.busAnimation,
-
-    // Microcode step
-    required this.microStep,
-    required this.instructionAddress,
-
-    // Control word
-    required this.controlWord,
-
-    // Clock
+    required this.highlightAddress,
     required this.onClockToggle,
     required this.onClockSingleStep,
     required this.onClockInstructionStep,
+    required this.onStepBack,
+    required this.onRunToCursor,
     required this.onClockSpeedChanged,
     required this.onClockManualModeChanged,
-
-    // RAM
-    required this.onRamEdit,
-
-    // CPU
     required this.onReset,
-    required this.onClearControlSignals,
+    required this.onDetailedViewChanged,
+    required this.onRamEdit,
     required this.onLoadProgram,
+    required this.onBreakpointsChanged,
+    required this.onCursorAddressChanged,
   });
+
+  // Keys locate the modules for the bus arrows. There is one board, so
+  // static keys are safe.
+  static final GlobalKey _boardKey = GlobalKey();
+  static final Map<BusNode, GlobalKey> _nodeKeys = {
+    for (final node in BusNode.values) node: GlobalKey(),
+  };
+
+  Widget _node(BusNode node, Widget child) =>
+      KeyedSubtree(key: _nodeKeys[node], child: child);
 
   @override
   Widget build(BuildContext context) {
     const spaceBetweenModules = 14.0;
+    final int word = cpu.controlWord;
+    bool on(ControlWord signal) => signal.isActive(word);
+    final info = StepInfo.of(cpu);
+    final bus = cpu.bus;
 
     return Stack(
+      key: _boardKey,
       children: [
-        Positioned.fill(
-          child: CustomPaint(
-            size: Size(
-              MediaQuery.sizeOf(context).width,
-              MediaQuery.sizeOf(context).height,
-            ),
-            painter: GridPainter(),
-          ),
-        ),
+        Positioned.fill(child: CustomPaint(painter: GridPainter())),
         Positioned.fill(
           child: Center(
+            // The Column gives the Row unbounded height, so every module
+            // keeps its natural height and the board stays centred.
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // const Text(
-                //   '8-bit CPU Visual Simulator',
-                //   style: TextStyle(
-                //     color: Colors.white60,
-                //     fontSize: 26,
-                //     fontWeight: FontWeight.bold,
-                //   ),
-                // ),
-                // const SizedBox(height: 12),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Column(
                       children: [
-                        RegisterModule(
-                          name: 'MEMORY ADDRESS REGISTER',
-                          value: memoryAddressRegister,
-                          busValue: bus,
-                          isInput: memoryIn,
-                          isOutput: false,
-                          color: Colors.red,
-                          isConnectedToBus: true,
-                          bitWidth: 4,
+                        _node(
+                          BusNode.memoryAddress,
+                          RegisterModule(
+                            name: 'MEMORY ADDRESS REGISTER',
+                            value: cpu.memoryAddressRegister,
+                            busValue: bus,
+                            isInput: on(ControlWord.mi),
+                            isOutput: false,
+                            color: Colors.red,
+                            isConnectedToBus: true,
+                            bitWidth: 4,
+                          ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        RAMModule(
-                          ram: ram,
-                          address: memoryAddressRegister,
-                          busValue: bus,
-                          isInput: ramIn,
-                          isOutput: ramOut,
-                          onEdit: onRamEdit,
+                        _node(
+                          BusNode.ram,
+                          RAMModule(
+                            ram: cpu.ram,
+                            address: cpu.memoryAddressRegister,
+                            busValue: bus,
+                            isInput: on(ControlWord.ri),
+                            isOutput: on(ControlWord.ro),
+                            onEdit: onRamEdit,
+                          ),
                         ),
                       ],
                     ),
@@ -225,12 +151,15 @@ class CPULayout extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ProgramCounterModule(
-                          value: programCounter,
-                          busValue: bus,
-                          isOutput: counterOut,
-                          isCount: counterEnable,
-                          isJump: jump,
+                        _node(
+                          BusNode.programCounter,
+                          ProgramCounterModule(
+                            value: cpu.programCounter,
+                            busValue: bus,
+                            isOutput: on(ControlWord.co),
+                            isCount: on(ControlWord.ce),
+                            isJump: on(ControlWord.j),
+                          ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
                         ClockModule(
@@ -241,33 +170,41 @@ class CPULayout extends StatelessWidget {
                           onToggle: onClockToggle,
                           onStep: onClockSingleStep,
                           onInstructionStep: onClockInstructionStep,
+                          onStepBack: onStepBack,
+                          onRunToCursor: onRunToCursor,
                           onReset: onReset,
                           onSpeedChanged: onClockSpeedChanged,
                           onModeChanged: onClockManualModeChanged,
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        InstructionRegisterModule(
-                          value: instructionRegister,
-                          busValue: bus,
-                          isInput: instructionIn,
-                          isOutput: instructionOut,
+                        _node(
+                          BusNode.instructionRegister,
+                          InstructionRegisterModule(
+                            value: cpu.instructionRegister,
+                            busValue: bus,
+                            isInput: on(ControlWord.ii),
+                            isOutput: on(ControlWord.io),
+                          ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
                         BusModule(
                           bus: bus,
-                          busActive: busActive,
+                          busActive: cpu.busActive,
                           animation: busAnimation,
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        ALUModule(
-                          registerA: registerA,
-                          registerB: registerB,
-                          sumRegister: sumRegister,
-                          subtract: subtract,
-                          carryFlag: carryFlag,
-                          zeroFlag: zeroFlag,
-                          isOutput: sumOut,
-                          isFlagsIn: flagsIn,
+                        _node(
+                          BusNode.alu,
+                          ALUModule(
+                            registerA: cpu.registerA,
+                            registerB: cpu.registerB,
+                            sumRegister: cpu.sumRegister,
+                            subtract: on(ControlWord.su),
+                            carryFlag: cpu.carryFlag,
+                            zeroFlag: cpu.zeroFlag,
+                            isOutput: on(ControlWord.so),
+                            isFlagsIn: on(ControlWord.fi),
+                          ),
                         ),
                       ],
                     ),
@@ -276,86 +213,103 @@ class CPULayout extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ControlWordModule(controlWord: controlWord),
-                        const SizedBox(height: spaceBetweenModules),
-                        ControlUnitModule(
-                          instruction: instructionRegister,
-                          step: microStep,
-                          controlWord: controlWord,
-                          signals: {
-                            ControlSignal.hlt: haltFlag,
-                            ControlSignal.mi: memoryIn,
-                            ControlSignal.ri: ramIn,
-                            ControlSignal.ro: ramOut,
-                            ControlSignal.io: instructionOut,
-                            ControlSignal.ii: instructionIn,
-                            ControlSignal.ai: aRegisterIn,
-                            ControlSignal.ao: aRegisterOut,
-                            ControlSignal.bi: bRegisterIn,
-                            ControlSignal.so: sumOut,
-                            ControlSignal.su: subtract,
-                            ControlSignal.oi: outputIn,
-                            ControlSignal.ce: counterEnable,
-                            ControlSignal.co: counterOut,
-                            ControlSignal.j: jump,
-                            ControlSignal.fi: flagsIn,
-                          },
-                        ),
-                        const SizedBox(height: spaceBetweenModules),
+                        if (detailedView) ...[
+                          MicrocodeModule(cpu: cpu),
+                          const SizedBox(height: spaceBetweenModules),
+                        ],
                         Row(
                           children: [
-                            OutputModule(
-                              value: outputRegister,
-                              busValue: bus,
-                              isInput: outputIn,
+                            _node(
+                              BusNode.output,
+                              OutputModule(
+                                value: cpu.outputRegister,
+                                busValue: bus,
+                                isInput: on(ControlWord.oi),
+                              ),
                             ),
                             const SizedBox(width: spaceBetweenModules),
                             FlagsModule(
-                              carryFlag: carryFlag,
-                              zeroFlag: zeroFlag,
-                              isInput: flagsIn,
+                              carryFlag: cpu.carryFlag,
+                              zeroFlag: cpu.zeroFlag,
+                              isInput: on(ControlWord.fi),
                             ),
                           ],
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        RegisterModule(
-                          name: 'A Register',
-                          value: registerA,
-                          busValue: bus,
-                          isInput: aRegisterIn,
-                          isOutput: aRegisterOut,
-                          color: Colors.red,
-                          isConnectedToBus: true,
+                        _node(
+                          BusNode.registerA,
+                          RegisterModule(
+                            name: 'A Register',
+                            value: cpu.registerA,
+                            busValue: bus,
+                            isInput: on(ControlWord.ai),
+                            isOutput: on(ControlWord.ao),
+                            color: Colors.red,
+                            isConnectedToBus: true,
+                          ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        RegisterModule(
-                          name: 'B Register',
-                          value: registerB,
-                          busValue: bus,
-                          isInput: bRegisterIn,
-                          isOutput: false,
-                          color: Colors.red,
-                          isConnectedToBus: true,
+                        _node(
+                          BusNode.registerB,
+                          RegisterModule(
+                            name: 'B Register',
+                            value: cpu.registerB,
+                            busValue: bus,
+                            isInput: on(ControlWord.bi),
+                            isOutput: false,
+                            color: Colors.red,
+                            isConnectedToBus: true,
+                          ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        const CreditsWidget(),
+                        StepCaptionModule(info: info, detailed: detailedView),
                       ],
                     ),
                     const SizedBox(width: spaceBetweenModules),
                     ProgramEditor(
                       initialProgram: initialProgram,
-                      currentAddress: instructionAddress,
+                      currentAddress: highlightAddress,
+                      onBreakpointsChanged: onBreakpointsChanged,
+                      onCursorAddressChanged: onCursorAddressChanged,
                       onAssemble: (program, hasError) {
                         if (!hasError && program.isNotEmpty) {
-                          onReset();
-                          onClearControlSignals();
                           onLoadProgram(program);
                         }
                       },
+                      headerActions: [
+                        _HeaderButton(
+                          icon: detailedView
+                              ? FluentIcons.eye_24_regular
+                              : FluentIcons.eye_off_24_regular,
+                          tooltip: detailedView
+                              ? 'Detailed view: microcode shown (click for simple)'
+                              : 'Simple view: microcode hidden (click for detailed)',
+                          onPressed: () => onDetailedViewChanged(!detailedView),
+                        ),
+                        _HeaderButton(
+                          icon: FluentIcons.info_24_regular,
+                          tooltip: 'About',
+                          onPressed: () => showAboutGlassBox(context),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: BusArrowPainter(
+                originKey: _boardKey,
+                nodeKeys: _nodeKeys,
+                source: cpu.busActive ? info.source : null,
+                destinations: info.destinations,
+                label:
+                    '0x${bus.toRadixString(16).toUpperCase().padLeft(2, '0')}',
+              ),
             ),
           ),
         ),
@@ -364,58 +318,27 @@ class CPULayout extends StatelessWidget {
   }
 }
 
-class CreditsWidget extends StatelessWidget {
-  const CreditsWidget({super.key});
+class _HeaderButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _HeaderButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (!kIsWeb) return const SizedBox();
-
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(color: Colors.white60, fontSize: 12),
-        children: [
-          const TextSpan(text: 'Developed by '),
-          TextSpan(
-            text: 'AbdulMuaz',
-            style: const TextStyle(
-              color: Colors.red,
-              decoration: TextDecoration.underline,
-            ),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () {
-                launchUrl(
-                  Uri.parse('https://devmuaz.com'),
-                  mode: LaunchMode.externalApplication,
-                );
-              },
-          ),
-          const TextSpan(text: '\nInspired by '),
-          TextSpan(
-            text: 'Ben Eater',
-            style: const TextStyle(
-              color: Colors.red,
-              decoration: TextDecoration.underline,
-            ),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () {
-                launchUrl(
-                  Uri.parse('https://eater.net'),
-                  mode: LaunchMode.externalApplication,
-                );
-              },
-          ),
-          const TextSpan(
-            text:
-                '\n\n"Every complex system is just simple parts working\ntogether."',
-            style: TextStyle(
-              color: Colors.white38,
-              fontSize: 11,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
+    return IconButton(
+      icon: Icon(icon, size: 16),
+      color: Colors.blue,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+      onPressed: onPressed,
     );
   }
 }

@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'core/control_word.dart';
 import 'core/cpu.dart';
 import 'cpu_layout.dart';
 
 /// Drives the [Cpu] with a clock and shows its state. All CPU behaviour
-/// lives in [Cpu] and [Microcode]; this widget only handles timing, the
-/// manual controls and the bus animation.
+/// lives in [Cpu] and [Microcode]; this widget handles timing, the manual
+/// controls, breakpoints, step-back history and the bus animation.
 class CPUBoard extends StatefulWidget {
   const CPUBoard({super.key});
 
@@ -26,6 +25,19 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   bool isRunning = false;
   double clockSpeed = 2.0;
   bool manualMode = false;
+
+  // Debugging
+  Set<int> breakpoints = {}; // instruction addresses
+  int? cursorAddress; // instruction address on the editor cursor line
+  int? runTarget; // run-to-cursor destination
+  int ticksSinceRun = 0; // lets Run continue from a breakpoint
+
+  /// States before each step, newest last, for step-back.
+  final List<CpuSnapshot> history = [];
+  static const int _historyLimit = 2000;
+
+  // View
+  bool detailedView = true;
 
   // Animation
   late AnimationController busAnimationController;
@@ -54,18 +66,58 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  /// Address whose source line the editor highlights: the instruction
+  /// about to run when between instructions, else the one running.
+  int get _highlightAddress =>
+      cpu.atInstructionStart ? cpu.programCounter : cpu.instructionAddress;
+
+  void _stopClock() {
+    clockTimer?.cancel();
+    singleStepTimer?.cancel();
+    singleStepTimer = null;
+    isRunning = false;
+    clockHigh = false;
+    runTarget = null;
+  }
+
   void _onLoadProgram(List<int> program) {
-    setState(() => cpu.load(program));
+    setState(() {
+      _stopClock();
+      history.clear();
+      cpu.load(program);
+    });
+  }
+
+  void _onReset() {
+    setState(() {
+      _stopClock();
+      history.clear();
+      cpu.reset(); // restarts the loaded program rather than wiping RAM
+    });
+  }
+
+  void _startClock({int? target}) {
+    runTarget = target;
+    ticksSinceRun = 0;
+    isRunning = true;
+    _runClock();
   }
 
   void _onClockToggle() {
     setState(() {
-      isRunning = !isRunning;
-      if (isRunning && !cpu.halted) {
-        _runClock();
-      } else {
-        clockTimer?.cancel();
+      if (isRunning) {
+        _stopClock();
+      } else if (!cpu.halted) {
+        _startClock();
       }
+    });
+  }
+
+  void _onRunToCursor() {
+    if (cursorAddress == null || cpu.halted) return;
+    setState(() {
+      clockTimer?.cancel();
+      _startClock(target: cursorAddress);
     });
   }
 
@@ -82,17 +134,26 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     );
   }
 
+  /// Whether the run should pause before the instruction at the program
+  /// counter: a breakpoint or the run-to-cursor target. The instruction the
+  /// run started on never stops it, so Run continues past a breakpoint.
+  bool get _shouldPause =>
+      cpu.atInstructionStart &&
+      ticksSinceRun > 0 &&
+      (breakpoints.contains(cpu.programCounter) ||
+          cpu.programCounter == runTarget);
+
   void _clockPulse(int edges) {
     setState(() {
       for (int i = 0; i < edges; i++) {
-        if (cpu.halted) {
-          clockTimer?.cancel();
-          isRunning = false;
+        if (cpu.halted || _shouldPause) {
+          _stopClock();
           return;
         }
         clockHigh = !clockHigh;
         if (!clockHigh) {
-          _tick(cpu.tick);
+          _advance(cpu.tick);
+          ticksSinceRun++;
         }
       }
     });
@@ -113,102 +174,51 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         clockHigh = false;
-        _tick(wholeInstruction ? cpu.stepInstruction : cpu.tick);
+        _advance(wholeInstruction ? cpu.stepInstruction : cpu.tick);
       });
     });
   }
 
-  /// Runs [advance] on the CPU and animates the bus if it carried a value.
-  void _tick(void Function() advance) {
+  /// Saves the state for step-back, runs [advance] on the CPU, and animates
+  /// the bus if it carried a value.
+  void _advance(void Function() advance) {
+    history.add(cpu.snapshot());
+    if (history.length > _historyLimit) history.removeAt(0);
     advance();
     if (cpu.busActive) {
       busAnimationController.forward(from: 0);
     }
   }
 
-  void _onReset() {
+  void _onStepBack() {
+    if (history.isEmpty || singleStepTimer != null) return;
     setState(() {
-      clockTimer?.cancel();
-      singleStepTimer?.cancel();
-      singleStepTimer = null;
-      isRunning = false;
+      cpu.restore(history.removeLast());
       clockHigh = false;
-      cpu.reset(); // restarts the loaded program rather than wiping RAM
     });
-  }
-
-  void _onClearControlSignals() {
-    cpu.controlWord = 0;
-    cpu.busActive = false;
   }
 
   @override
   Widget build(BuildContext context) {
-    final int word = cpu.controlWord;
-    bool on(ControlWord signal) => signal.isActive(word);
-
     return Scaffold(
       backgroundColor: const Color(0xFF0a0a0a),
       body: CPULayout(
-        // ? Bus
-        bus: cpu.bus,
-        busActive: cpu.busActive,
-
-        // ? Registers
-        registerA: cpu.registerA,
-        registerB: cpu.registerB,
-        instructionRegister: cpu.instructionRegister,
-        memoryAddressRegister: cpu.memoryAddressRegister,
-        programCounter: cpu.programCounter,
-        outputRegister: cpu.outputRegister,
-        sumRegister: cpu.sumRegister,
-
-        // ? Flags
-        carryFlag: cpu.carryFlag,
-        zeroFlag: cpu.zeroFlag,
-
-        // ? Control signals
+        cpu: cpu,
         clockHigh: clockHigh,
-        haltFlag: cpu.halted,
-        memoryIn: on(ControlWord.mi),
-        ramIn: on(ControlWord.ri),
-        ramOut: on(ControlWord.ro),
-        instructionOut: on(ControlWord.io),
-        instructionIn: on(ControlWord.ii),
-        aRegisterIn: on(ControlWord.ai),
-        aRegisterOut: on(ControlWord.ao),
-        bRegisterIn: on(ControlWord.bi),
-        sumOut: on(ControlWord.so),
-        subtract: on(ControlWord.su),
-        outputIn: on(ControlWord.oi),
-        counterEnable: on(ControlWord.ce),
-        counterOut: on(ControlWord.co),
-        jump: on(ControlWord.j),
-        flagsIn: on(ControlWord.fi),
-
-        // ? RAM
-        ram: cpu.ram,
-
-        // ? Clock
         isRunning: isRunning,
         clockSpeed: clockSpeed,
         manualMode: manualMode,
-
-        // ? Animation
+        detailedView: detailedView,
         busAnimation: busAnimation,
-
-        // ? Microcode step
-        microStep: cpu.microStep,
-        instructionAddress: cpu.instructionAddress,
-
-        // ? Control word
-        controlWord: word,
-
-        // ? Clock
+        highlightAddress: _highlightAddress,
         onClockToggle: _onClockToggle,
         onClockSingleStep: _onClockSingleStep,
         onClockInstructionStep: () =>
             _onClockSingleStep(wholeInstruction: true),
+        onStepBack: history.isEmpty ? null : _onStepBack,
+        onRunToCursor: cursorAddress == null || cpu.halted
+            ? null
+            : _onRunToCursor,
         onClockSpeedChanged: (speed) {
           setState(() {
             clockSpeed = speed;
@@ -220,19 +230,24 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
         },
         onClockManualModeChanged: (manual) {
           setState(() {
+            if (manual) _stopClock();
             manualMode = manual;
           });
         },
-
-        // ? RAM
+        onReset: _onReset,
+        onDetailedViewChanged: (detailed) {
+          setState(() => detailedView = detailed);
+        },
         onRamEdit: (address, value) {
           setState(() => cpu.writeRam(address, value));
         },
-
-        // ? CPU
-        onReset: _onReset,
-        onClearControlSignals: _onClearControlSignals,
         onLoadProgram: _onLoadProgram,
+        onBreakpointsChanged: (addresses) {
+          setState(() => breakpoints = addresses);
+        },
+        onCursorAddressChanged: (address) {
+          setState(() => cursorAddress = address);
+        },
       ),
     );
   }
