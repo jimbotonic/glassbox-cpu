@@ -10,6 +10,12 @@ class RegisterModule extends StatelessWidget {
   final bool isConnectedToBus;
   final int bitWidth;
 
+  /// Small line under the name, e.g. what the register is for.
+  final String? note;
+
+  /// Panel width; 8 LEDs need at least 192.
+  final double width;
+
   const RegisterModule({
     super.key,
     required this.name,
@@ -20,6 +26,8 @@ class RegisterModule extends StatelessWidget {
     required this.color,
     this.isConnectedToBus = false,
     this.bitWidth = 8,
+    this.note,
+    this.width = 250,
   });
 
   @override
@@ -32,7 +40,7 @@ class RegisterModule extends StatelessWidget {
         .padLeft(hexPadding, '0');
 
     return Container(
-      width: 250,
+      width: width,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1a1a1a),
@@ -70,9 +78,9 @@ class RegisterModule extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (bitWidth == 4)
+                  if (bitWidth == 4 || note != null)
                     Text(
-                      '(4-bit)',
+                      note ?? '(4-bit)',
                       style: TextStyle(color: color, fontSize: 10),
                     ),
                 ],

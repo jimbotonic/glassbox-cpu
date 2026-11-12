@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/cpu_mode.dart';
+
 class InstructionSetDialog extends StatelessWidget {
-  const InstructionSetDialog({super.key});
+  /// Machine in use; Extended mode adds its section first.
+  final CpuMode mode;
+
+  const InstructionSetDialog({super.key, this.mode = CpuMode.classic});
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +47,20 @@ class InstructionSetDialog extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (mode == CpuMode.extended) ...[
+                    _buildExtendedSection(),
+                    const SizedBox(height: 20),
+                    Text(
+                      'CLASSIC INSTRUCTIONS (ALSO IN EXTENDED, WITH 8-BIT '
+                      'OPERANDS: ADDRESSES 0-255, VALUES -128..255)',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   _buildOperandTypesSection(),
                   const SizedBox(height: 20),
                   _buildInstructionsSection(),
@@ -53,6 +72,164 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildExtendedSection() {
+    const addr = 'Address (0-255), operand byte';
+    const imm = 'Value (-128..255), operand byte';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.cyan.withValues(alpha: 0.4)),
+            borderRadius: BorderRadius.circular(4),
+            color: Colors.cyan.withValues(alpha: 0.06),
+          ),
+          child: Text(
+            'EXTENDED CPU: 256 bytes of RAM. An instruction is an opcode '
+            'byte, followed by an operand byte when it takes an address or '
+            'a value; the CPU reads that byte at the program counter '
+            '(CO|MI, then RO|..|CE). Names ending in I take a value, the '
+            'others an address. The ALU always works on A and B, so ADD, '
+            'SUB, AND, OR, XOR, CMP, ADI and SBI overwrite B. The stack '
+            'grows down from 0xFF; keep code and data below it.',
+            style: TextStyle(color: Colors.grey[300], fontSize: 11),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildInstructionCategory('EXTENDED: DATA MOVEMENT', Colors.blue, [
+          const _InstructionInfo(
+            mnemonic: 'LDB',
+            hex: '0x0B',
+            usage: 'LDB addr',
+            color: Colors.blue,
+            description: 'Load B - Loads value from RAM into B register.',
+            behavior:
+                'Reads RAM[addr] into B. Use it to set the index for LDA [B].',
+            operandType: addr,
+            example: 'LDB ptr ; B = RAM[ptr]',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'LDA [B]',
+            hex: '0x30',
+            usage: 'LDA [B]',
+            color: Colors.blue,
+            description: 'Indexed load - Loads from the address held in B.',
+            behavior:
+                'B drives the bus into MAR (BO|MI), then RAM goes into A '
+                '(RO|AI). Walks arrays and strings. One byte, no operand.',
+            operandType: 'None ([B] is written in the source)',
+            example: 'LDA [B] ; A = RAM[B]',
+          ),
+        ]),
+        const SizedBox(height: 16),
+        _buildInstructionCategory('EXTENDED: ALU', Colors.teal, [
+          const _InstructionInfo(
+            mnemonic: 'ADI',
+            hex: '0x0C',
+            usage: 'ADI #val',
+            color: Colors.teal,
+            description: 'Add Immediate - A = A + val.',
+            behavior: 'The value goes into B, then A + B into A. Sets C and Z.',
+            operandType: imm,
+            example: 'ADI 1 ; A = A + 1',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'SBI',
+            hex: '0x0D',
+            usage: 'SBI #val',
+            color: Colors.teal,
+            description: 'Subtract Immediate - A = A - val.',
+            behavior: 'Like ADI, subtracting. C is set on a borrow.',
+            operandType: imm,
+            example: 'SBI 1 ; A = A - 1',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'AND / OR / XOR',
+            hex: '0x10-0x12',
+            usage: 'AND addr',
+            color: Colors.teal,
+            description: 'Bitwise logic - A = A op RAM[addr].',
+            behavior: 'Bit by bit on A and B. Clears C, sets Z.',
+            operandType: addr,
+            example: 'AND mask ; keep the bits set in RAM[mask]',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'CMP',
+            hex: '0x13',
+            usage: 'CMP addr',
+            color: Colors.teal,
+            description: 'Compare - Computes A - RAM[addr] for the flags only.',
+            behavior:
+                'A is unchanged. Z = 1 when equal; C = 1 when A is smaller.',
+            operandType: addr,
+            example: 'CMP limit ; then JZ / JC / JNZ / JNC',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'SHL / SHR',
+            hex: '0x14 / 0x15',
+            usage: 'SHL',
+            color: Colors.teal,
+            description: 'Shift A left or right by one bit.',
+            behavior:
+                'The bit shifted out goes into C; a 0 comes in. SHL doubles, '
+                'SHR halves.',
+            operandType: 'None',
+          ),
+        ]),
+        const SizedBox(height: 16),
+        _buildInstructionCategory('EXTENDED: JUMPS & STACK', Colors.orange, [
+          const _InstructionInfo(
+            mnemonic: 'JNZ / JNC',
+            hex: '0x0A / 0x09',
+            usage: 'JNZ addr',
+            color: Colors.orange,
+            description: 'Jump if Not Zero / Not Carry.',
+            behavior:
+                'Jumps when the flag is 0. Otherwise one step (CE) skips the '
+                'operand byte.',
+            operandType: addr,
+            example: 'JNZ loop',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'PUSH / POP',
+            hex: '0x20 / 0x21',
+            usage: 'PUSH',
+            color: Colors.orange,
+            description: 'Save A on the stack / restore it.',
+            behavior:
+                'PUSH writes A at RAM[SP] then SP = SP - 1. POP does SP = SP '
+                '+ 1 then A = RAM[SP]. Last in, first out.',
+            operandType: 'None',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'CALL',
+            hex: '0x22',
+            usage: 'CALL addr',
+            color: Colors.orange,
+            description: 'Call a subroutine.',
+            behavior:
+                'Pushes PC (the address of its own operand byte), then jumps '
+                'to addr.',
+            operandType: addr,
+            example: 'CALL multiply',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'RET',
+            hex: '0x23',
+            usage: 'RET',
+            color: Colors.orange,
+            description: 'Return from a subroutine.',
+            behavior:
+                'Pops the saved PC, then steps past the CALL\'s operand byte '
+                '(CE), landing on the instruction after the CALL.',
+            operandType: 'None',
+          ),
+        ]),
+      ],
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'core/control_word.dart';
 import 'core/cpu.dart';
+import 'core/cpu_mode.dart';
 import 'core/step_info.dart';
 import 'ui/about_dialog.dart';
 import 'ui/editor/code_editor.dart';
@@ -16,6 +17,7 @@ import 'ui/modules/output_module.dart';
 import 'ui/modules/program_counter_module.dart';
 import 'ui/modules/ram_module.dart';
 import 'ui/modules/register_module.dart';
+import 'ui/modules/stack_pointer_module.dart';
 import 'ui/modules/step_caption_module.dart';
 import 'ui/painters/bus_arrow_painter.dart';
 import 'ui/painters/grid_painter.dart';
@@ -52,6 +54,9 @@ class CPULayout extends StatelessWidget {
   // View controls
   final ValueChanged<bool> onDetailedViewChanged;
 
+  /// Switches between the Classic and Extended machines.
+  final ValueChanged<CpuMode> onModeChanged;
+
   // Program
   final void Function(int address, int value) onRamEdit;
   final void Function(List<int> program) onLoadProgram;
@@ -78,6 +83,7 @@ class CPULayout extends StatelessWidget {
     required this.onClockManualModeChanged,
     required this.onReset,
     required this.onDetailedViewChanged,
+    required this.onModeChanged,
     required this.onRamEdit,
     required this.onLoadProgram,
     required this.onBreakpointsChanged,
@@ -91,6 +97,11 @@ class CPULayout extends StatelessWidget {
     for (final node in BusNode.values) node: GlobalKey(),
   };
 
+  // Third column: as wide as the microcode panel.
+  static const double _columnWidth = 400;
+  static const double _sideWidth = 136; // beside the 250 px output panel
+  static const double _halfWidth = 193; // A and B side by side
+
   Widget _node(BusNode node, Widget child) =>
       KeyedSubtree(key: _nodeKeys[node], child: child);
 
@@ -101,6 +112,8 @@ class CPULayout extends StatelessWidget {
     bool on(ControlWord signal) => signal.isActive(word);
     final info = StepInfo.of(cpu);
     final bus = cpu.bus;
+    final mode = cpu.mode;
+    final extended = mode == CpuMode.extended;
 
     return Stack(
       key: _boardKey,
@@ -129,7 +142,8 @@ class CPULayout extends StatelessWidget {
                             isOutput: false,
                             color: Colors.red,
                             isConnectedToBus: true,
-                            bitWidth: 4,
+                            bitWidth: mode.addressBits,
+                            note: '(${mode.addressBits}-bit)',
                           ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
@@ -142,6 +156,11 @@ class CPULayout extends StatelessWidget {
                             isInput: on(ControlWord.ri),
                             isOutput: on(ControlWord.ro),
                             onEdit: onRamEdit,
+                            mode: mode,
+                            programCounter: extended
+                                ? cpu.programCounter
+                                : null,
+                            stackPointer: extended ? cpu.stackPointer : null,
                           ),
                         ),
                       ],
@@ -159,6 +178,7 @@ class CPULayout extends StatelessWidget {
                             isOutput: on(ControlWord.co),
                             isCount: on(ControlWord.ce),
                             isJump: on(ControlWord.j),
+                            bitWidth: mode.addressBits,
                           ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
@@ -184,6 +204,8 @@ class CPULayout extends StatelessWidget {
                             busValue: bus,
                             isInput: on(ControlWord.ii),
                             isOutput: on(ControlWord.io),
+                            mode: mode,
+                            operand: extended ? cpu.currentOperand : null,
                           ),
                         ),
                         const SizedBox(height: spaceBetweenModules),
@@ -199,7 +221,7 @@ class CPULayout extends StatelessWidget {
                             registerA: cpu.registerA,
                             registerB: cpu.registerB,
                             sumRegister: cpu.sumRegister,
-                            subtract: on(ControlWord.su),
+                            operation: StepInfo.aluLabel(word),
                             carryFlag: cpu.carryFlag,
                             zeroFlag: cpu.zeroFlag,
                             isOutput: on(ControlWord.so),
@@ -217,57 +239,100 @@ class CPULayout extends StatelessWidget {
                           MicrocodeModule(cpu: cpu),
                           const SizedBox(height: spaceBetweenModules),
                         ],
+                        // Every row spans the microcode panel's 400 px:
+                        // 250 + 14 + 136, then 193 + 14 + 193.
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _node(
+                                BusNode.output,
+                                OutputModule(
+                                  value: cpu.outputRegister,
+                                  busValue: bus,
+                                  isInput: on(ControlWord.oi),
+                                ),
+                              ),
+                              const SizedBox(width: spaceBetweenModules),
+                              SizedBox(
+                                width: _sideWidth,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: FlagsModule(
+                                        carryFlag: cpu.carryFlag,
+                                        zeroFlag: cpu.zeroFlag,
+                                        isInput: on(ControlWord.fi),
+                                      ),
+                                    ),
+                                    if (extended) ...[
+                                      const SizedBox(
+                                        height: spaceBetweenModules,
+                                      ),
+                                      _node(
+                                        BusNode.stackPointer,
+                                        StackPointerModule(
+                                          value: cpu.stackPointer,
+                                          ram: cpu.ram,
+                                          isOutput: on(ControlWord.spo),
+                                          isIncrement: on(ControlWord.spInc),
+                                          isDecrement: on(ControlWord.spDec),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: spaceBetweenModules),
                         Row(
                           children: [
                             _node(
-                              BusNode.output,
-                              OutputModule(
-                                value: cpu.outputRegister,
+                              BusNode.registerA,
+                              RegisterModule(
+                                name: 'A Register',
+                                value: cpu.registerA,
                                 busValue: bus,
-                                isInput: on(ControlWord.oi),
+                                isInput: on(ControlWord.ai),
+                                isOutput: on(ControlWord.ao),
+                                color: Colors.red,
+                                isConnectedToBus: true,
+                                width: _halfWidth,
                               ),
                             ),
                             const SizedBox(width: spaceBetweenModules),
-                            FlagsModule(
-                              carryFlag: cpu.carryFlag,
-                              zeroFlag: cpu.zeroFlag,
-                              isInput: on(ControlWord.fi),
+                            _node(
+                              BusNode.registerB,
+                              RegisterModule(
+                                name: 'B Register',
+                                value: cpu.registerB,
+                                busValue: bus,
+                                isInput: on(ControlWord.bi),
+                                isOutput: on(ControlWord.bo),
+                                color: Colors.red,
+                                isConnectedToBus: true,
+                                width: _halfWidth,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: spaceBetweenModules),
-                        _node(
-                          BusNode.registerA,
-                          RegisterModule(
-                            name: 'A Register',
-                            value: cpu.registerA,
-                            busValue: bus,
-                            isInput: on(ControlWord.ai),
-                            isOutput: on(ControlWord.ao),
-                            color: Colors.red,
-                            isConnectedToBus: true,
-                          ),
+                        StepCaptionModule(
+                          info: info,
+                          detailed: detailedView,
+                          width: _columnWidth,
                         ),
-                        const SizedBox(height: spaceBetweenModules),
-                        _node(
-                          BusNode.registerB,
-                          RegisterModule(
-                            name: 'B Register',
-                            value: cpu.registerB,
-                            busValue: bus,
-                            isInput: on(ControlWord.bi),
-                            isOutput: false,
-                            color: Colors.red,
-                            isConnectedToBus: true,
-                          ),
-                        ),
-                        const SizedBox(height: spaceBetweenModules),
-                        StepCaptionModule(info: info, detailed: detailedView),
                       ],
                     ),
                     const SizedBox(width: spaceBetweenModules),
                     ProgramEditor(
                       initialProgram: initialProgram,
+                      mode: mode,
+                      onModeChanged: onModeChanged,
                       currentAddress: highlightAddress,
                       onBreakpointsChanged: onBreakpointsChanged,
                       onCursorAddressChanged: onCursorAddressChanged,
@@ -277,6 +342,7 @@ class CPULayout extends StatelessWidget {
                         }
                       },
                       headerActions: [
+                        _ModeToggle(mode: mode, onChanged: onModeChanged),
                         _HeaderButton(
                           icon: detailedView
                               ? FluentIcons.eye_24_regular
@@ -339,6 +405,47 @@ class _HeaderButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
       onPressed: onPressed,
+    );
+  }
+}
+
+/// Header chip that shows the current machine and switches to the other.
+class _ModeToggle extends StatelessWidget {
+  final CpuMode mode;
+  final ValueChanged<CpuMode> onChanged;
+
+  const _ModeToggle({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final other = mode == CpuMode.classic ? CpuMode.extended : CpuMode.classic;
+    final color = mode == CpuMode.classic ? Colors.blue : Colors.cyanAccent;
+    return Tooltip(
+      message:
+          '${mode.label} CPU: ${mode.description}\n'
+          'Click to switch to ${other.label} (${other.description}). '
+          'RAM is cleared.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => onChanged(other),
+        child: Container(
+          margin: const EdgeInsets.only(right: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color.withValues(alpha: 0.6)),
+            color: color.withValues(alpha: 0.12),
+          ),
+          child: Text(
+            mode.label.toUpperCase(),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

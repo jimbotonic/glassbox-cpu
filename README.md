@@ -108,6 +108,27 @@ The CPU supports 11 instructions with a simple format: 4-bit opcode and 4-bit op
 | **OUT**  | 0xE    | `OUT`      | Copy register A to output register            |
 | **HLT**  | 0xF    | `HLT`      | Halt program execution                        |
 
+### Extended CPU
+
+The chip in the editor header switches between **Classic** (the machine above, the default) and **Extended**. Switching clears RAM.
+
+The Extended CPU keeps the same bus and fetch cycle, widened to 256 bytes of RAM with 8-bit PC, MAR and stack pointer. The opcode is a whole byte. An instruction that takes an address or value is followed by an operand byte, which the CPU reads at the program counter (`CO|MI`, then `RO|..|CE`). Immediates range from -128 to 255. The eleven Classic instructions keep their numbers (0x00–0x0F); these are added:
+
+| Mnemonic          | Opcode      | Format      | Description                                              |
+| ----------------- | ----------- | ----------- | -------------------------------------------------------- |
+| **JNC** / **JNZ** | 0x09 / 0x0A | `JNZ addr`  | Jump if Carry / Zero is clear                            |
+| **LDB**           | 0x0B        | `LDB addr`  | Load value from RAM address into register B              |
+| **ADI** / **SBI** | 0x0C / 0x0D | `ADI #val`  | A = A ± value                                            |
+| **AND**, **OR**, **XOR** | 0x10–0x12 | `AND addr` | Bitwise A op RAM[addr]; clears carry               |
+| **CMP**           | 0x13        | `CMP addr`  | Flags from A − RAM[addr]; A unchanged                    |
+| **SHL** / **SHR** | 0x14 / 0x15 | `SHL`       | Shift A one bit; the bit shifted out goes into carry     |
+| **PUSH** / **POP**| 0x20 / 0x21 | `PUSH`      | Save / restore A on the stack (grows down from 0xFF)     |
+| **CALL**          | 0x22        | `CALL addr` | Push PC (its operand's address) and jump                 |
+| **RET**           | 0x23        | `RET`       | Pop PC and step past the CALL's operand                  |
+| **LDA [B]**       | 0x30        | `LDA [B]`   | Load from the address held in B (arrays, strings)        |
+
+The ALU always works on A and B, so ALU instructions overwrite B. The Extended control word adds nine signals: BO, SPO, SP+, SP−, and the ALU selects AN, OR, XR, SL, SR. The *Extended CPU* built-in programs show each feature.
+
 ## Getting Started
 
 ### Prerequisites
