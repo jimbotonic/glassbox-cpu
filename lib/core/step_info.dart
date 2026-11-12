@@ -12,7 +12,8 @@ enum BusNode {
   registerB('B'),
   alu('ALU'),
   memoryAddress('MAR'),
-  output('OUT');
+  output('OUT'),
+  stackPointer('SP');
 
   final String label;
   const BusNode(this.label);
@@ -73,13 +74,14 @@ class StepInfo {
         destinations: const [],
         transfer: '',
         effects: [
-          'next step fetches the instruction at ${_hex4(cpu.programCounter)}',
+          'next step fetches the instruction at ${cpu.mode.hexAddress(cpu.programCounter)}',
         ],
       );
     }
 
     bool on(ControlWord signal) => signal.isActive(word);
-    final mar = _hex4(cpu.memoryAddressRegister);
+    final mode = cpu.mode;
+    final mar = mode.hexAddress(cpu.memoryAddressRegister);
 
     BusNode? source;
     String? sourceLabel;
@@ -95,9 +97,15 @@ class StepInfo {
     } else if (on(ControlWord.ao)) {
       source = BusNode.registerA;
       sourceLabel = 'A';
+    } else if (on(ControlWord.bo)) {
+      source = BusNode.registerB;
+      sourceLabel = 'B';
+    } else if (on(ControlWord.spo)) {
+      source = BusNode.stackPointer;
+      sourceLabel = 'SP';
     } else if (on(ControlWord.so)) {
       source = BusNode.alu;
-      sourceLabel = on(ControlWord.su) ? 'A − B' : 'A + B';
+      sourceLabel = aluLabel(word);
     }
 
     final destinations = <BusNode>[];
@@ -123,7 +131,9 @@ class StepInfo {
               '${destinationLabels.isEmpty ? '' : ' → ${destinationLabels.join(', ')}'}';
 
     final effects = <String>[
-      if (on(ControlWord.ce)) 'PC + 1 → ${_hex4(cpu.programCounter)}',
+      if (on(ControlWord.ce)) 'PC + 1 → ${mode.hexAddress(cpu.programCounter)}',
+      if (on(ControlWord.spInc)) 'SP + 1 → ${_hex8(cpu.stackPointer)}',
+      if (on(ControlWord.spDec)) 'SP − 1 → ${_hex8(cpu.stackPointer)}',
       if (on(ControlWord.fi))
         'flags C=${cpu.carryFlag ? 1 : 0} Z=${cpu.zeroFlag ? 1 : 0}',
       if (on(ControlWord.hlt)) 'clock stopped',
@@ -141,17 +151,31 @@ class StepInfo {
     );
   }
 
+  /// The ALU operation selected by [word], e.g. `A + B` or `A << 1`.
+  static String aluLabel(int word) {
+    bool on(ControlWord signal) => signal.isActive(word);
+    if (on(ControlWord.sl)) return 'A << 1';
+    if (on(ControlWord.sr)) return 'A >> 1';
+    if (on(ControlWord.an)) return 'A AND B';
+    if (on(ControlWord.or)) return 'A OR B';
+    if (on(ControlWord.xr)) return 'A XOR B';
+    if (on(ControlWord.su)) return 'A − B';
+    return 'A + B';
+  }
+
   static String _purpose(Cpu cpu, int step) {
     if (step == 0) return 'fetch: address of next instruction';
     if (step == 1) return 'fetch: load instruction, advance PC';
     final opcode = cpu.currentOpcode;
-    final operand = cpu.instructionRegister & 0xF;
-    if (opcode == Opcode.ldi) return 'LDI #$operand';
-    return opcode.requiresOperand
-        ? '${opcode.mnemonic} ${_hex4(operand)}'
-        : opcode.mnemonic;
+    final operand = cpu.currentOperand;
+    return switch (opcode.operand) {
+      OperandKind.none => opcode.mnemonic,
+      OperandKind.indexedB => opcode.usage,
+      OperandKind.immediate => '${opcode.mnemonic} #$operand',
+      OperandKind.address =>
+        '${opcode.mnemonic} ${cpu.mode.hexAddress(operand!)}',
+    };
   }
 }
 
-String _hex4(int v) => '0x${v.toRadixString(16).toUpperCase()}';
 String _hex8(int v) => '0x${v.toRadixString(16).toUpperCase().padLeft(2, '0')}';

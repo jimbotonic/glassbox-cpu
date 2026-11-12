@@ -45,7 +45,36 @@ enum ControlSignal {
   j('J'),
 
   // ? Flags In
-  fi('FI');
+  fi('FI'),
+
+  // Extended mode only, from here on.
+
+  // ? B Register Out
+  bo('BO'),
+
+  // ? Stack Pointer Out
+  spo('SPO'),
+
+  // ? Stack Pointer increment
+  spInc('SP+'),
+
+  // ? Stack Pointer decrement
+  spDec('SP-'),
+
+  // ? ALU function: AND
+  an('AN'),
+
+  // ? ALU function: OR
+  or('OR'),
+
+  // ? ALU function: XOR
+  xr('XR'),
+
+  // ? ALU function: shift A left
+  sl('SL'),
+
+  // ? ALU function: shift A right
+  sr('SR');
 
   final String mnemonic;
   const ControlSignal(this.mnemonic);
