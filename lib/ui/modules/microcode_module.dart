@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/control_word.dart';
 import '../../core/cpu.dart';
 import '../../core/microcode.dart';
+import '../../core/opcode.dart';
 
 /// The control logic as a table: the micro-steps of the current
 /// instruction with their control words, the step just executed
-/// highlighted, and the 16 control signals of that step below.
+/// highlighted, and the control signals of that step below (16 in Classic
+/// mode, 25 in Extended mode).
 ///
 /// Replaces the separate Control Word and Control Logic panels.
 class MicrocodeModule extends StatelessWidget {
@@ -15,10 +17,12 @@ class MicrocodeModule extends StatelessWidget {
   const MicrocodeModule({super.key, required this.cpu});
 
   static const _rowHeight = 19.0;
-  static const _maxRows = 5; // ADD and SUB: fetch + 3 execute steps
 
   @override
   Widget build(BuildContext context) {
+    final mode = cpu.mode;
+    // Pad to the longest instruction so the panels below never move.
+    final maxRows = Microcode.maxStepCount(mode);
     final executed = cpu.executedStep;
     // The instruction register holds the current instruction only once T1
     // has loaded it; at T0 it still holds the previous one.
@@ -29,13 +33,17 @@ class MicrocodeModule extends StatelessWidget {
             ...Microcode.fetch,
             ...Microcode.executeSteps(
               opcode,
+              mode: mode,
               carry: cpu.carryFlag,
               zero: cpu.zeroFlag,
             ),
           ]
         : Microcode.fetch;
     final word = cpu.controlWord;
-    final hexWord = word.toRadixString(16).toUpperCase().padLeft(4, '0');
+    final hexWord = word
+        .toRadixString(16)
+        .toUpperCase()
+        .padLeft(ControlWord.hexDigits(mode), '0');
 
     return Container(
       width: 400,
@@ -84,7 +92,12 @@ class MicrocodeModule extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      decoded ? opcode.mnemonic : 'FETCH',
+                      !decoded
+                          ? 'FETCH'
+                          : opcode.operand == OperandKind.indexedB
+                          ? opcode
+                                .usage // LDA [B]
+                          : opcode.mnemonic,
                       style: const TextStyle(
                         color: Colors.green,
                         fontSize: 12,
@@ -104,15 +117,14 @@ class MicrocodeModule extends StatelessWidget {
           for (int i = 0; i < steps.length; i++)
             _StepRow(step: i, word: steps[i], isCurrent: i == executed),
           if (!decoded) const _StepRow(step: 2, word: null, isCurrent: false),
-          // Pad to the longest instruction so the panels below never move.
-          for (int i = steps.length + (decoded ? 0 : 1); i < _maxRows; i++)
+          for (int i = steps.length + (decoded ? 0 : 1); i < maxRows; i++)
             const SizedBox(height: _rowHeight + 2),
           const SizedBox(height: 8),
           Wrap(
             spacing: 3,
             runSpacing: 3,
             children: [
-              for (final signal in ControlWord.values)
+              for (final signal in ControlWord.forMode(mode))
                 _SignalChip(
                   label: signal.controlSignal.mnemonic,
                   active: signal.isActive(word),

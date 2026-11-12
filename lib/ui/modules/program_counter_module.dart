@@ -7,6 +7,9 @@ class ProgramCounterModule extends StatelessWidget {
   final bool isCount;
   final bool isJump;
 
+  /// 4 in Classic mode, 8 in Extended mode.
+  final int bitWidth;
+
   const ProgramCounterModule({
     super.key,
     required this.value,
@@ -14,12 +17,16 @@ class ProgramCounterModule extends StatelessWidget {
     required this.isOutput,
     required this.isCount,
     required this.isJump,
+    this.bitWidth = 4,
   });
 
   @override
   Widget build(BuildContext context) {
-    final value4bit = value & 0xF;
-    final valueAsHex = value4bit.toRadixString(16).toUpperCase();
+    final value4bit = value & ((1 << bitWidth) - 1);
+    final valueAsHex = value4bit
+        .toRadixString(16)
+        .toUpperCase()
+        .padLeft(bitWidth ~/ 4, '0');
 
     return Container(
       width: 250,
@@ -51,10 +58,10 @@ class ProgramCounterModule extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'PROGRAM COUNTER',
                     style: TextStyle(
                       color: Colors.red,
@@ -63,8 +70,8 @@ class ProgramCounterModule extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '(4-bit)',
-                    style: TextStyle(color: Colors.red, fontSize: 10),
+                    '($bitWidth-bit)',
+                    style: const TextStyle(color: Colors.red, fontSize: 10),
                   ),
                 ],
               ),
@@ -86,12 +93,17 @@ class ProgramCounterModule extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: bitWidth == 4
+                ? MainAxisAlignment.start
+                : MainAxisAlignment.spaceBetween,
             children: [
-              for (int i = 3; i >= 0; i--)
+              for (int i = bitWidth - 1; i >= 0; i--)
                 Container(
                   width: 20,
                   height: 20,
-                  margin: const EdgeInsets.only(right: 8),
+                  margin: bitWidth == 4
+                      ? const EdgeInsets.only(right: 8)
+                      : EdgeInsets.zero,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: ((value4bit >> i) & 1) == 1

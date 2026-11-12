@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/cpu.dart';
+import 'core/cpu_mode.dart';
 import 'cpu_layout.dart';
 
 /// Drives the [Cpu] with a clock and shows its state. All CPU behaviour
@@ -85,6 +86,19 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
       _stopClock();
       history.clear();
       cpu.load(program);
+    });
+  }
+
+  /// Switches machine. RAM is cleared: a program for one machine does not
+  /// run on the other, so it must be assembled again.
+  void _onModeChanged(CpuMode mode) {
+    if (mode == cpu.mode) return;
+    setState(() {
+      _stopClock();
+      history.clear();
+      breakpoints = {};
+      cursorAddress = null;
+      cpu.setMode(mode);
     });
   }
 
@@ -235,6 +249,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
           });
         },
         onReset: _onReset,
+        onModeChanged: _onModeChanged,
         onDetailedViewChanged: (detailed) {
           setState(() => detailedView = detailed);
         },
