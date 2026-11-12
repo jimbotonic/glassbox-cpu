@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'cpu_mode.dart';
+
 enum BuiltinProgramCategory {
   beginner('Beginner', Colors.green),
   arithmetic('Arithmetic', Colors.blue),
   controlFlow('Control Flow', Colors.orange),
-  patterns('Patterns', Colors.purple);
+  patterns('Patterns', Colors.purple),
+  extended('Extended CPU', Colors.cyan);
 
   final String name;
   final Color color;
@@ -17,11 +20,15 @@ class BuiltinProgram {
   final String code;
   final BuiltinProgramCategory category;
 
+  /// Machine the program is written for; opening it switches to it.
+  final CpuMode mode;
+
   const BuiltinProgram({
     required this.name,
     required this.description,
     required this.code,
     required this.category,
+    this.mode = CpuMode.classic,
   });
 }
 
@@ -229,11 +236,136 @@ JMP 0x0      ; Loop''',
     ),
   ];
 
+  static const List<BuiltinProgram> extendedPrograms = [
+    BuiltinProgram(
+      name: 'Countdown (immediates & JNZ)',
+      description:
+          'Counts down from 10 with SBI and JNZ: no data bytes needed. '
+          'Extended CPU',
+      category: BuiltinProgramCategory.extended,
+      mode: CpuMode.extended,
+      code: '''; Extended CPU: 8-bit immediates, two-byte instructions
+        LDI 10        ; A = 10 (opcode byte + value byte)
+loop:   OUT           ; Show A
+        SBI 1         ; A = A - 1, sets the zero flag
+        JNZ loop      ; Repeat while A is not 0
+        HLT''',
+    ),
+
+    BuiltinProgram(
+      name: 'Hello (string with LDA [B])',
+      description:
+          'Walks a zero-terminated string with an index in B and outputs '
+          'each character code: 72 69 76 76 79. Extended CPU',
+      category: BuiltinProgramCategory.extended,
+      mode: CpuMode.extended,
+      code: '''; Extended CPU: indexed load walks a string
+loop:   LDB ptr       ; B = address of the next character
+        LDA [B]       ; A = RAM[B]
+        CMP zero      ; End of string? (sets Z, A unchanged)
+        JZ  done
+        OUT           ; Show the character code
+        LDA ptr       ; ptr = ptr + 1
+        ADI 1
+        STA ptr
+        JMP loop
+done:   HLT
+
+ptr:    .db msg       ; Pointer to the string
+zero:   .db 0
+msg:    .db "HELLO", 0''',
+    ),
+
+    BuiltinProgram(
+      name: 'Stack reverse (PUSH / POP)',
+      description:
+          'Pushes 1, 2, 3 and pops them back: the stack gives them in '
+          'reverse, 3 2 1. Extended CPU',
+      category: BuiltinProgramCategory.extended,
+      mode: CpuMode.extended,
+      code: '''; Extended CPU: the stack grows down from 0xFF
+        LDI 1
+        PUSH          ; RAM[SP] = A, SP = SP - 1
+        LDI 2
+        PUSH
+        LDI 3
+        PUSH
+        POP           ; SP = SP + 1, A = RAM[SP]
+        OUT           ; 3
+        POP
+        OUT           ; 2
+        POP
+        OUT           ; 1
+        HLT''',
+    ),
+
+    BuiltinProgram(
+      name: 'Multiply (CALL, shifts, AND)',
+      description:
+          'A shift-and-add multiply subroutine: 13 × 11 = 143. Extended CPU',
+      category: BuiltinProgramCategory.extended,
+      mode: CpuMode.extended,
+      code: '''; Extended CPU: subroutine, shifts and masks
+        CALL multiply ; Push the return address, jump
+        OUT           ; 143
+        HLT
+
+; result = x * y, one bit of y at a time
+multiply:
+        LDI 0
+        STA result
+next:   LDA y
+        CMP zero      ; No bits left?
+        JZ  finish
+        AND one       ; Lowest bit of y
+        JZ  shift
+        LDA result    ; Bit set: result = result + x
+        ADD x
+        STA result
+shift:  LDA x         ; x = x * 2
+        SHL
+        STA x
+        LDA y         ; y = y / 2
+        SHR
+        STA y
+        JMP next
+finish: LDA result
+        RET           ; Pop the return address
+
+x:      .db 13
+y:      .db 11
+result: .db 0
+zero:   .db 0
+one:    .db 1''',
+    ),
+
+    BuiltinProgram(
+      name: 'Bouncing bit (SHL / SHR)',
+      description:
+          'A lit bit runs left to bit 7 and back: 1 2 4 … 128 64 … 1. '
+          'The carry flag catches the bit that falls off. Extended CPU',
+      category: BuiltinProgramCategory.extended,
+      mode: CpuMode.extended,
+      code: '''; Extended CPU: shifts move a bit; carry says when it fell off
+start:  LDI 1
+left:   OUT
+        SHL           ; Bit 7 goes into the carry
+        JNC left
+        LDI 0x40
+right:  OUT
+        SHR           ; Bit 0 goes into the carry
+        JNC right
+        LDI 2
+        JMP left''',
+    ),
+  ];
+
   static const List<BuiltinProgram> all = [
     ...beginnerPrograms,
     ...arithmeticPrograms,
     ...controlFlowPrograms,
     ...patternsPrograms,
+    ...extendedPrograms,
   ];
 
   static List<BuiltinProgram> getByCategory(BuiltinProgramCategory category) {

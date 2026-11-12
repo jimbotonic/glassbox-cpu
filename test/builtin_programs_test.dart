@@ -1,6 +1,7 @@
 import 'package:flutter_8_bit_cpu_simulator/core/assembler.dart';
 import 'package:flutter_8_bit_cpu_simulator/core/builtin_program_list.dart';
 import 'package:flutter_8_bit_cpu_simulator/core/cpu.dart';
+import 'package:flutter_8_bit_cpu_simulator/core/cpu_mode.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs the built-in program [name] until it halts, it has produced [limit]
@@ -14,8 +15,8 @@ import 'package:flutter_test/flutter_test.dart';
   expect(program, isNotNull, reason: 'no built-in program named "$name"');
 
   final outputs = <int>[];
-  final cpu = Cpu()
-    ..load(Assembler().assemble(program!.code))
+  final cpu = Cpu(mode: program!.mode)
+    ..load(Assembler(mode: program.mode).assemble(program.code))
     ..onOutput = outputs.add;
 
   for (int i = 0; i < maxTicks && !cpu.halted; i++) {
@@ -28,8 +29,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('every built-in program assembles and fits in RAM', () {
     for (final program in BuiltinProgramList.all) {
-      final code = Assembler().assemble(program.code);
-      expect(code.length, lessThanOrEqualTo(Cpu.ramSize), reason: program.name);
+      final code = Assembler(mode: program.mode).assemble(program.code);
+      expect(
+        code.length,
+        lessThanOrEqualTo(program.mode.ramSize),
+        reason: program.name,
+      );
     }
   });
 
@@ -74,6 +79,45 @@ void main() {
       final result = runProgram('Multiples of 5');
       expect(result.outputs, List.generate(52, (i) => i * 5));
       expect(result.halted, isTrue);
+    });
+  });
+
+  group('Extended CPU programs', () {
+    test('every one is marked Extended', () {
+      for (final program in BuiltinProgramList.extendedPrograms) {
+        expect(program.mode, CpuMode.extended, reason: program.name);
+      }
+    });
+
+    test('Countdown (immediates & JNZ) outputs 10..1', () {
+      final result = runProgram('Countdown (immediates & JNZ)');
+      expect(result.outputs, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      expect(result.halted, isTrue);
+    });
+
+    test('Hello outputs the character codes of HELLO', () {
+      final result = runProgram('Hello (string with LDA [B])');
+      expect(String.fromCharCodes(result.outputs), 'HELLO');
+      expect(result.halted, isTrue);
+    });
+
+    test('Stack reverse outputs 3 2 1', () {
+      final result = runProgram('Stack reverse (PUSH / POP)');
+      expect(result.outputs, [3, 2, 1]);
+      expect(result.halted, isTrue);
+    });
+
+    test('Multiply outputs 13 × 11 = 143', () {
+      final result = runProgram('Multiply (CALL, shifts, AND)');
+      expect(result.outputs, [143]);
+      expect(result.halted, isTrue);
+    });
+
+    test('Bouncing bit goes up to 128 and back', () {
+      final result = runProgram('Bouncing bit (SHL / SHR)', limit: 17);
+      expect(result.outputs, [
+        1, 2, 4, 8, 16, 32, 64, 128, 64, 32, 16, 8, 4, 2, 1, 2, 4, //
+      ]);
     });
   });
 
