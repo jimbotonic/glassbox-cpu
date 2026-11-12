@@ -1,4 +1,5 @@
 import 'control_word.dart';
+import 'cpu_mode.dart';
 import 'microcode.dart';
 import 'opcode.dart';
 
@@ -8,10 +9,21 @@ import 'opcode.dart';
 /// current micro-step in [Microcode] and applies it. Applying a control
 /// word is generic, exactly as on the breadboard: the "out" signals choose
 /// which module drives the bus, then every "in" signal latches the bus.
+///
+/// [mode] picks the machine: Classic (16 bytes, 4-bit addresses) or
+/// Extended (256 bytes, 8-bit addresses, stack pointer, more ALU
+/// operations). See [CpuMode].
 class Cpu {
-  static const int ramSize = 16;
+  Cpu({CpuMode mode = CpuMode.classic})
+    : _mode = mode,
+      ram = List.filled(mode.ramSize, 0);
 
-  final List<int> ram = List.filled(ramSize, 0);
+  CpuMode get mode => _mode;
+  CpuMode _mode;
+
+  int get ramSize => _mode.ramSize;
+
+  List<int> ram;
 
   /// Program written back into RAM on [reset].
   List<int> get program => _program;
@@ -33,6 +45,11 @@ class Cpu {
   int outputRegister = 0;
   int sumRegister = 0;
 
+  /// Next free stack byte (Extended mode). The stack grows down from the
+  /// top of RAM.
+  int stackPointer = initialStackPointer;
+  static const int initialStackPointer = 0xFF;
+
   // Flags
   bool carryFlag = false;
   bool zeroFlag = false;
@@ -50,7 +67,26 @@ class Cpu {
   /// RAM address of the instruction being executed, latched at T0.
   int instructionAddress = 0;
 
-  Opcode get currentOpcode => Opcode.fromHex((instructionRegister >> 4) & 0xF);
+  Opcode get currentOpcode => Opcode.decode(instructionRegister, _mode);
+
+  /// Operand of the current instruction: the low nibble of IR in Classic
+  /// mode, the byte after the opcode in Extended mode (null if it takes
+  /// none).
+  int? get currentOperand {
+    final opcode = currentOpcode;
+    if (!opcode.takesValue) return null;
+    if (_mode == CpuMode.classic) return instructionRegister & 0xF;
+    return ram[(instructionAddress + 1) & _mode.addressMask];
+  }
+
+  /// Switches machine. RAM is resized and cleared, and the program dropped,
+  /// since code for one machine does not run on the other.
+  void setMode(CpuMode mode) {
+    _mode = mode;
+    ram = List.filled(mode.ramSize, 0);
+    _program = const [];
+    reset();
+  }
 
   /// Loads [program] into RAM, keeps it for [reset], and resets the CPU.
   void load(List<int> program) {
@@ -70,6 +106,7 @@ class Cpu {
     programCounter = 0;
     outputRegister = 0;
     sumRegister = 0;
+    stackPointer = initialStackPointer;
     carryFlag = false;
     zeroFlag = false;
     halted = false;
@@ -84,7 +121,7 @@ class Cpu {
 
   /// Edits RAM by hand, as with the DIP switches on the breadboard.
   void writeRam(int address, int value) {
-    ram[address & 0xF] = value & 0xFF;
+    ram[address & _mode.addressMask] = value & 0xFF;
   }
 
   /// Runs one clock cycle (one micro-step). Does nothing once halted.
@@ -97,12 +134,18 @@ class Cpu {
     // during the instruction, but its length is fixed when it starts.
     final int? stepCount = step < Microcode.fetch.length
         ? null
-        : Microcode.stepCount(opcode, carry: carryFlag, zero: zeroFlag);
+        : Microcode.stepCount(
+            opcode,
+            mode: _mode,
+            carry: carryFlag,
+            zero: zeroFlag,
+          );
 
     if (step == 0) instructionAddress = programCounter;
     controlWord = Microcode.controlWordAt(
       opcode,
       step,
+      mode: _mode,
       carry: carryFlag,
       zero: zeroFlag,
     );
@@ -119,7 +162,8 @@ class Cpu {
   /// Copy of the whole machine state, for step-back.
   CpuSnapshot snapshot() => CpuSnapshot._(this);
 
-  /// Puts the machine back in the state captured by [snapshot].
+  /// Puts the machine back in the state captured by [snapshot]. The
+  /// snapshot must come from the current mode.
   void restore(CpuSnapshot s) {
     ram.setAll(0, s._ram);
     bus = s._bus;
@@ -131,6 +175,7 @@ class Cpu {
     programCounter = s._programCounter;
     outputRegister = s._outputRegister;
     sumRegister = s._sumRegister;
+    stackPointer = s._stackPointer;
     carryFlag = s._carryFlag;
     zeroFlag = s._zeroFlag;
     halted = s._halted;
@@ -143,7 +188,7 @@ class Cpu {
   /// Runs the remaining micro-steps of the current instruction; from T0
   /// this is a whole instruction, fetch included.
   void stepInstruction() {
-    // The longest instruction takes 5 cycles; the cap guards against a loop.
+    // The longest instruction takes 6 cycles; the cap guards against a loop.
     for (int i = 0; i < 8; i++) {
       tick();
       if (microStep == 0 || halted) return;
@@ -161,14 +206,31 @@ class Cpu {
     return ticks;
   }
 
+  /// What the ALU computes this cycle, from A and B as they are before
+  /// the cycle's latches: the 8-bit result and the carry it would set.
+  ({int value, bool carry}) aluResult([int? word]) {
+    final w = word ?? controlWord;
+    bool on(ControlWord signal) => signal.isActive(w);
+    final a = registerA;
+    final b = registerB;
+    if (on(ControlWord.sl)) {
+      return (value: (a << 1) & 0xFF, carry: (a & 0x80) != 0);
+    }
+    if (on(ControlWord.sr)) return (value: a >> 1, carry: (a & 0x01) != 0);
+    if (on(ControlWord.an)) return (value: a & b, carry: false);
+    if (on(ControlWord.or)) return (value: a | b, carry: false);
+    if (on(ControlWord.xr)) return (value: a ^ b, carry: false);
+    if (on(ControlWord.su)) {
+      // Carry on subtract is a borrow.
+      return (value: (a - b) & 0xFF, carry: a - b < 0);
+    }
+    return (value: (a + b) & 0xFF, carry: a + b > 0xFF);
+  }
+
   void _apply(int word) {
     bool on(ControlWord signal) => signal.isActive(word);
-
-    // ALU: computed from A and B as they are before this cycle's latches.
-    final bool subtract = on(ControlWord.su);
-    final int aluResult = subtract
-        ? registerA - registerB
-        : registerA + registerB;
+    final mask = _mode.addressMask;
+    final alu = aluResult(word);
 
     // 1. Who drives the bus. At most one "out" signal is active per step.
     busActive = true;
@@ -180,15 +242,19 @@ class Cpu {
       bus = instructionRegister & 0xF;
     } else if (on(ControlWord.ao)) {
       bus = registerA;
+    } else if (on(ControlWord.bo)) {
+      bus = registerB;
+    } else if (on(ControlWord.spo)) {
+      bus = stackPointer;
     } else if (on(ControlWord.so)) {
-      sumRegister = aluResult & 0xFF;
+      sumRegister = alu.value;
       bus = sumRegister;
     } else {
       busActive = false; // nothing drives the bus; it keeps its last value
     }
 
     // 2. Who reads it, on the clock edge.
-    if (on(ControlWord.mi)) memoryAddressRegister = bus & 0xF;
+    if (on(ControlWord.mi)) memoryAddressRegister = bus & mask;
     if (on(ControlWord.ri)) ram[memoryAddressRegister] = bus;
     if (on(ControlWord.ii)) instructionRegister = bus;
     if (on(ControlWord.ai)) registerA = bus;
@@ -197,12 +263,13 @@ class Cpu {
       outputRegister = bus;
       onOutput?.call(outputRegister);
     }
-    if (on(ControlWord.j)) programCounter = bus & 0xF;
-    if (on(ControlWord.ce)) programCounter = (programCounter + 1) & 0xF;
+    if (on(ControlWord.j)) programCounter = bus & mask;
+    if (on(ControlWord.ce)) programCounter = (programCounter + 1) & mask;
+    if (on(ControlWord.spInc)) stackPointer = (stackPointer + 1) & 0xFF;
+    if (on(ControlWord.spDec)) stackPointer = (stackPointer - 1) & 0xFF;
     if (on(ControlWord.fi)) {
-      // Carry on add is an overflow past 8 bits; on subtract it is a borrow.
-      carryFlag = subtract ? aluResult < 0 : aluResult > 0xFF;
-      zeroFlag = (aluResult & 0xFF) == 0;
+      carryFlag = alu.carry;
+      zeroFlag = alu.value == 0;
     }
     if (on(ControlWord.hlt)) halted = true;
   }
@@ -221,6 +288,7 @@ class CpuSnapshot {
       _programCounter = cpu.programCounter,
       _outputRegister = cpu.outputRegister,
       _sumRegister = cpu.sumRegister,
+      _stackPointer = cpu.stackPointer,
       _carryFlag = cpu.carryFlag,
       _zeroFlag = cpu.zeroFlag,
       _halted = cpu.halted,
@@ -239,6 +307,7 @@ class CpuSnapshot {
   final int _programCounter;
   final int _outputRegister;
   final int _sumRegister;
+  final int _stackPointer;
   final bool _carryFlag;
   final bool _zeroFlag;
   final bool _halted;

@@ -1,3 +1,4 @@
+import 'cpu_mode.dart';
 import 'opcode.dart';
 
 /// An assembly error, tied to a 1-based source line when there is one.
@@ -93,11 +94,20 @@ final RegExp _identifierPattern = RegExp(r'^[A-Za-z_]\w*$');
 /// Operands may be decimal, `0x` hex, `0b` binary, a character `'A'`, or a
 /// label or constant name; a leading `#` is optional. Names are not
 /// case-sensitive.
+///
+/// [mode] picks the instruction set and encoding. In Classic mode every
+/// instruction is one byte, opcode in the high nibble and a 0-15 operand
+/// in the low nibble. In Extended mode the opcode is a whole byte, and an
+/// instruction that takes a value is followed by an operand byte (0-255;
+/// immediates may also be -128..-1). `LDA [B]` loads from the address in B.
 class Assembler {
+  final CpuMode mode;
+
   /// Bytes of RAM the program must fit into.
   final int memorySize;
 
-  Assembler({this.memorySize = 16});
+  Assembler({this.mode = CpuMode.classic, int? memorySize})
+    : memorySize = memorySize ?? mode.ramSize;
 
   List<int> assemble(String source) =>
       assembleWithSourceMap(source).machineCode;
@@ -127,7 +137,8 @@ class Assembler {
               line: s.line,
             );
           }
-          s.size = 1;
+          s.opcode = _opcode(s);
+          s.size = s.opcode!.sizeIn(mode);
       }
       address += s.size;
     }
@@ -154,8 +165,10 @@ class Assembler {
           }
         }
       } else {
-        machineCode.add(_instruction(s, symbols));
-        sourceLines.add(s.line - 1);
+        for (final byte in _instruction(s, symbols)) {
+          machineCode.add(byte);
+          sourceLines.add(s.line - 1);
+        }
       }
     }
 
@@ -198,7 +211,7 @@ class Assembler {
 
   void _define(Map<String, int> symbols, String name, int value, int line) {
     final key = name.toUpperCase();
-    if (Opcode.values.any((op) => op.mnemonic == key)) {
+    if (Opcode.isMnemonic(key)) {
       throw AssemblerError(
         '"$name" is an instruction and cannot be a name',
         line: line,
@@ -218,13 +231,44 @@ class Assembler {
     return (parts[0], parts[1]);
   }
 
-  int _instruction(_Statement s, Map<String, int> symbols) {
-    final opcode = Opcode.values
-        .where((op) => op.mnemonic == s.keyword)
-        .firstOrNull;
-    if (opcode == null) {
+  static final RegExp _indexedB = RegExp(
+    r'^\[\s*B\s*\]$',
+    caseSensitive: false,
+  );
+
+  /// Instruction named on [s], chosen by mnemonic and, for `LDA`, by
+  /// whether the operand is `[B]`.
+  Opcode _opcode(_Statement s) {
+    final candidates = Opcode.values.where((op) => op.mnemonic == s.keyword);
+    if (candidates.isEmpty) {
       throw AssemblerError('Unknown instruction "${s.keyword}"', line: s.line);
     }
+    final indexed = _indexedB.hasMatch(s.operands);
+    final opcode = candidates.firstWhere(
+      (op) => (op.operand == OperandKind.indexedB) == indexed,
+      orElse: () => indexed
+          ? throw AssemblerError(
+              '${s.keyword} cannot take [B]; only LDA [B] is indexed',
+              line: s.line,
+            )
+          : candidates.first,
+    );
+    if (!opcode.isAvailableIn(mode)) {
+      throw AssemblerError(
+        '${opcode.usage} exists only in Extended mode',
+        line: s.line,
+      );
+    }
+    return opcode;
+  }
+
+  List<int> _instruction(_Statement s, Map<String, int> symbols) {
+    final opcode = s.opcode!;
+    final code = mode == CpuMode.classic
+        ? opcode.classic! << 4
+        : opcode.extended;
+
+    if (opcode.operand == OperandKind.indexedB) return [code];
 
     final parts = s.operands.isEmpty
         ? const <String>[]
@@ -239,17 +283,36 @@ class Assembler {
           line: s.line,
         );
       }
-      return opcode.hex << 4;
+      return [code];
     }
-
-    final operand = _value(parts[0], symbols, s.line);
-    if (operand < 0 || operand > 15) {
+    if (!opcode.takesValue) {
       throw AssemblerError(
-        'Operand must be 0-15 (4-bit), got $operand',
+        '${opcode.mnemonic} takes no operand, got "${parts[0]}"',
         line: s.line,
       );
     }
-    return (opcode.hex << 4) | operand;
+
+    final operand = _value(parts[0], symbols, s.line);
+    if (mode == CpuMode.classic) {
+      if (operand < 0 || operand > 15) {
+        throw AssemblerError(
+          'Operand must be 0-15 (4-bit), got $operand',
+          line: s.line,
+        );
+      }
+      return [code | operand];
+    }
+
+    final min = opcode.operand == OperandKind.immediate ? -128 : 0;
+    if (operand < min || operand > 255) {
+      throw AssemblerError(
+        opcode.operand == OperandKind.immediate
+            ? 'Value must be -128..255 (8-bit), got $operand'
+            : 'Address must be 0-255 (8-bit), got $operand',
+        line: s.line,
+      );
+    }
+    return [code, operand & 0xFF];
   }
 
   /// Splits the operands of a `.db` line on commas outside quotes.
@@ -366,6 +429,9 @@ class _Statement {
 
   /// Bytes this statement occupies, set in pass 1.
   int size = 0;
+
+  /// Instruction on this line, resolved in pass 1.
+  Opcode? opcode;
 
   _Statement(this.line, this.label, this.keyword, this.operands);
 }
