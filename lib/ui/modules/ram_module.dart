@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
-import '../../core/disassembler.dart';
-import '../../core/assembler.dart';
 
-class RAMModule extends StatelessWidget {
+import '../../core/assembler.dart';
+import '../../core/cpu_mode.dart';
+import '../../core/disassembler.dart';
+
+/// RAM contents, one row per byte. Classic RAM (16 bytes) fits in one
+/// view; Extended RAM (256 bytes) is shown one 16-byte page at a time, and
+/// the page follows the memory address register unless the user browses
+/// to another one.
+class RAMModule extends StatefulWidget {
   final List<int> ram;
   final int address;
   final int busValue;
   final bool isInput;
   final bool isOutput;
   final Function(int, int) onEdit;
+  final CpuMode mode;
+
+  /// Marked rows (Extended mode): where the program counter and the stack
+  /// pointer point.
+  final int? programCounter;
+  final int? stackPointer;
 
   const RAMModule({
     super.key,
@@ -18,10 +30,47 @@ class RAMModule extends StatelessWidget {
     required this.isInput,
     required this.isOutput,
     required this.onEdit,
+    this.mode = CpuMode.classic,
+    this.programCounter,
+    this.stackPointer,
   });
 
   @override
+  State<RAMModule> createState() => _RAMModuleState();
+}
+
+class _RAMModuleState extends State<RAMModule> {
+  static const int _rowsPerPage = 16;
+
+  /// Page chosen with the arrows, or null to follow the MAR.
+  int? _browsedPage;
+
+  int get _pageCount => widget.ram.length ~/ _rowsPerPage;
+  int get _page => _browsedPage ?? widget.address ~/ _rowsPerPage;
+
+  @override
+  void didUpdateWidget(RAMModule old) {
+    super.didUpdateWidget(old);
+    // Follow the MAR again as soon as it moves, or when the mode changes.
+    if (old.address != widget.address || old.mode != widget.mode) {
+      _browsedPage = null;
+    }
+  }
+
+  void _browse(int delta) {
+    setState(() => _browsedPage = (_page + delta) % _pageCount);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final mode = widget.mode;
+    final ram = widget.ram;
+    final isInput = widget.isInput;
+    final isOutput = widget.isOutput;
+    final paged = _pageCount > 1;
+    final first = paged ? _page * _rowsPerPage : 0;
+    final lines = Disassembler.sweep(ram, mode: mode);
+
     return Container(
       width: 250,
       padding: const EdgeInsets.all(16),
@@ -52,11 +101,11 @@ class RAMModule extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'RAM',
                       style: TextStyle(
                         color: Colors.red,
@@ -64,10 +113,10 @@ class RAMModule extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      '16 bytes (4-bit addressing)',
-                      style: TextStyle(
+                      '${ram.length} bytes (${mode.addressBits}-bit addressing)',
+                      style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -90,7 +139,18 @@ class RAMModule extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          if (paged) ...[
+            const SizedBox(height: 6),
+            _PageBar(
+              first: first,
+              last: first + _rowsPerPage - 1,
+              mode: mode,
+              following: _browsedPage == null,
+              onPrevious: () => _browse(-1),
+              onNext: () => _browse(1),
+            ),
+          ],
+          SizedBox(height: paged ? 6 : 12),
           Container(
             decoration: BoxDecoration(
               color: Colors.black,
@@ -100,10 +160,14 @@ class RAMModule extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.all(6),
-              itemCount: 16,
-              itemBuilder: (context, index) {
-                final isActive = address == index;
-                final instruction = Disassembler.disassemble(ram[index]);
+              itemCount: paged ? _rowsPerPage : ram.length,
+              itemBuilder: (context, row) {
+                final index = first + row;
+                final isActive = widget.address == index;
+                final tags = [
+                  if (widget.programCounter == index) 'PC',
+                  if (widget.stackPointer == index) 'SP',
+                ];
 
                 return GestureDetector(
                   onTap: () {
@@ -117,13 +181,15 @@ class RAMModule extends StatelessWidget {
                         child: _EditRAMDialog(
                           address: index,
                           currentValue: ram[index],
-                          onValueChanged: (newValue) => onEdit(index, newValue),
+                          mode: mode,
+                          onValueChanged: (newValue) =>
+                              widget.onEdit(index, newValue),
                         ),
                       ),
                     );
                   },
                   child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 3.3),
+                    margin: EdgeInsets.symmetric(vertical: paged ? 2.2 : 3.3),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
                       vertical: 6,
@@ -140,19 +206,35 @@ class RAMModule extends StatelessWidget {
                     child: Row(
                       children: [
                         Text(
-                          'ADDR: 0x${index.toRadixString(16).toUpperCase()}',
+                          paged
+                              ? mode.hexAddress(index)
+                              : 'ADDR: ${mode.hexAddress(index)}',
                           style: TextStyle(
                             color: isActive ? Colors.red : Colors.grey,
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if (paged)
+                          SizedBox(
+                            width: 30,
+                            child: Text(
+                              tags.join(' '),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.amber,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         Expanded(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Expanded(
-                                child: Text(
+                              _valueCell(
+                                paged,
+                                Text(
                                   '0x${ram[index].toRadixString(16).toUpperCase().padLeft(2, '0')}',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
@@ -166,8 +248,9 @@ class RAMModule extends StatelessWidget {
                               ),
                               Expanded(
                                 child: Text(
-                                  instruction,
+                                  lines[index],
                                   textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: isActive
                                         ? Colors.greenAccent
@@ -193,14 +276,68 @@ class RAMModule extends StatelessWidget {
   }
 }
 
+/// Byte value cell: fixed width beside the PC/SP tags when paged, else
+/// half of the row as in the original layout.
+Widget _valueCell(bool paged, Widget child) =>
+    paged ? SizedBox(width: 34, child: child) : Expanded(child: child);
+
+/// Extended RAM page selector: `< page 0x20-0x2F >`.
+class _PageBar extends StatelessWidget {
+  final int first;
+  final int last;
+  final CpuMode mode;
+  final bool following;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  const _PageBar({
+    required this.first,
+    required this.last,
+    required this.mode,
+    required this.following,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget arrow(IconData icon, String tip, VoidCallback onPressed) =>
+        IconButton(
+          icon: Icon(icon, size: 16),
+          color: Colors.red,
+          tooltip: tip,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 24, minHeight: 22),
+          onPressed: onPressed,
+        );
+    final range = '${mode.hexAddress(first)}-${mode.hexAddress(last)}';
+    return Row(
+      children: [
+        arrow(Icons.chevron_left, 'Previous 16 bytes', onPrevious),
+        Expanded(
+          child: Text(
+            following ? 'page $range  (follows MAR)' : 'page $range',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[400], fontSize: 10),
+          ),
+        ),
+        arrow(Icons.chevron_right, 'Next 16 bytes', onNext),
+      ],
+    );
+  }
+}
+
 class _EditRAMDialog extends StatefulWidget {
   final int address;
   final int currentValue;
+  final CpuMode mode;
   final Function(int) onValueChanged;
 
   const _EditRAMDialog({
     required this.address,
     required this.currentValue,
+    required this.mode,
     required this.onValueChanged,
   });
 
@@ -209,7 +346,6 @@ class _EditRAMDialog extends StatefulWidget {
 }
 
 class _EditRAMDialogState extends State<_EditRAMDialog> {
-  static final _assembler = Assembler();
   late final TextEditingController _controller;
   String? _errorMessage;
 
@@ -229,7 +365,9 @@ class _EditRAMDialogState extends State<_EditRAMDialog> {
     final trimmed = input.trim();
 
     try {
-      final machineCode = _assembler.assemble(trimmed);
+      // An Extended instruction with an operand is two bytes; one RAM cell
+      // takes the opcode byte.
+      final machineCode = Assembler(mode: widget.mode).assemble(trimmed);
       if (machineCode.isNotEmpty) {
         return machineCode[0];
       }
@@ -299,7 +437,7 @@ class _EditRAMDialogState extends State<_EditRAMDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'EDIT RAM AT ADDRESS 0x${widget.address.toRadixString(16).toUpperCase()}',
+                'EDIT RAM AT ADDRESS ${widget.mode.hexAddress(widget.address)}',
                 style: const TextStyle(
                   color: Colors.red,
                   fontSize: 16,

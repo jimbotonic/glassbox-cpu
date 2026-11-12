@@ -9,17 +9,19 @@ class StepCaptionModule extends StatelessWidget {
 
   /// Also show the raw control signals.
   final bool detailed;
+  final double width;
 
   const StepCaptionModule({
     super.key,
     required this.info,
     required this.detailed,
+    this.width = 250,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 250,
+      width: width,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1a1a1a),

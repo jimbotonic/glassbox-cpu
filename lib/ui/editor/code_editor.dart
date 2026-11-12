@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/assembler.dart';
 import '../../core/builtin_program_list.dart';
+import '../../core/cpu_mode.dart';
 import 'assembly_text_editing_controller.dart';
 import 'builtin_program_browser_dialog.dart';
 import 'instruction_set_dialog.dart';
@@ -25,6 +26,13 @@ class ProgramEditor extends StatefulWidget {
   /// Extra buttons shown in the header, next to the status icon.
   final List<Widget> headerActions;
 
+  /// Machine the program is assembled for.
+  final CpuMode mode;
+
+  /// Asked to switch machine, when a built-in program for the other one is
+  /// opened.
+  final ValueChanged<CpuMode>? onModeChanged;
+
   const ProgramEditor({
     super.key,
     required this.onAssemble,
@@ -33,6 +41,8 @@ class ProgramEditor extends StatefulWidget {
     this.onBreakpointsChanged,
     this.onCursorAddressChanged,
     this.headerActions = const [],
+    this.mode = CpuMode.classic,
+    this.onModeChanged,
   });
 
   @override
@@ -42,7 +52,6 @@ class ProgramEditor extends StatefulWidget {
 class _ProgramEditorState extends State<ProgramEditor> {
   static const _programs = BuiltinProgramList.all;
   static final _categories = BuiltinProgramList.getCategories();
-  static final _assembler = Assembler();
 
   late final TextEditingController _errorMessageController;
   late final AssemblyTextEditingController _editorController;
@@ -122,22 +131,25 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
     String hex(int v, int width) =>
         v.toRadixString(16).toUpperCase().padLeft(width, '0');
+    final digits = widget.mode.addressDigits;
     final bytes = [for (final a in addresses) hex(assembly.machineCode[a], 2)];
     final first = addresses.first;
     final range = addresses.length == 1
-        ? '0x${hex(first, 1)}'
-        : '0x${hex(first, 1)}-0x${hex(addresses.last, 1)}';
+        ? '0x${hex(first, digits)}'
+        : '0x${hex(first, digits)}-0x${hex(addresses.last, digits)}';
     return (
-      text: '${hex(first, 1)} ${bytes.first}${bytes.length > 1 ? '+' : ''}',
+      text:
+          '${hex(first, digits)} ${bytes.first}${bytes.length > 1 ? '+' : ''}',
       tooltip: '$range: ${bytes.join(' ')}',
       isData: assembly.dataAddresses.contains(first),
     );
   }
 
-  static const double _listingWidth = 46;
+  double get _listingWidth => widget.mode == CpuMode.classic ? 46 : 54;
 
   /// Listing column: address and first byte assembled from [line], e.g.
-  /// `3 4F`, with a `+` when a `.db` line fills several bytes.
+  /// `3 4F`, with a `+` when the line fills several bytes (a `.db` line,
+  /// or an Extended instruction and its operand byte).
   Widget _listingCell(int line) {
     final listing = _listingFor(line);
     final cell = SizedBox(
@@ -198,6 +210,25 @@ class _ProgramEditorState extends State<ProgramEditor> {
     _updateLineCount();
   }
 
+  @override
+  void didUpdateWidget(ProgramEditor old) {
+    super.didUpdateWidget(old);
+    if (old.mode != widget.mode) {
+      // The CPU was switched and its RAM cleared: the old assembly is gone.
+      setState(() {
+        isAssembled = false;
+        _assembly = null;
+        _errorLine = null;
+      });
+      _errorMessageController.text =
+          '[NORMAL] ${widget.mode.label} CPU: ${widget.mode.description}.\n'
+          '[NORMAL] RAM cleared. Please assemble again.';
+      _setLogTypeNormal();
+      _reportBreakpoints();
+      _reportCursor();
+    }
+  }
+
   void _updateLineCount() {
     setState(() {
       _lineCount = '\n'.allMatches(_editorController.text).length + 1;
@@ -243,7 +274,9 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
   void _assembleProgram() {
     try {
-      final assembly = _assembler.assembleWithSourceMap(_editorController.text);
+      final assembly = Assembler(
+        mode: widget.mode,
+      ).assembleWithSourceMap(_editorController.text);
       final program = assembly.machineCode;
       setState(() {
         isAssembled = true;
@@ -251,7 +284,9 @@ class _ProgramEditorState extends State<ProgramEditor> {
         _errorLine = null;
       });
       _errorMessageController.text =
-          '[INFO] Assembled successfully!\n[INFO] See RAM\'s content in the CPU Board.';
+          '[INFO] Assembled for ${widget.mode.label}: ${program.length} of '
+          '${widget.mode.ramSize} bytes.\n'
+          '[INFO] See RAM\'s content in the CPU Board.';
       _setLogTypeInfo();
       widget.onAssemble(program, false);
       _reportBreakpoints();
@@ -279,7 +314,11 @@ class _ProgramEditorState extends State<ProgramEditor> {
         child: BuiltinProgramBrowserDialog(
           programs: _programs,
           categories: _categories,
+          currentMode: widget.mode,
           onProgramSelected: (program) {
+            if (program.mode != widget.mode) {
+              widget.onModeChanged?.call(program.mode);
+            }
             setState(() {
               isAssembled = false;
               _errorLine = null;
@@ -289,7 +328,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
             _updateLineCount();
             _reportBreakpoints();
             _errorMessageController.text =
-                '[NORMAL] Program loaded successfully!';
+                '[NORMAL] Program loaded for the ${program.mode.label} CPU.\n'
+                '[NORMAL] Press ASSEMBLE & LOAD to put it in RAM.';
             _setLogTypeNormal();
           },
         ),
@@ -303,7 +343,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
       builder: (context) => Dialog(
         backgroundColor: const Color(0xFF1a1a1a),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: const InstructionSetDialog(),
+        child: InstructionSetDialog(mode: widget.mode),
       ),
     );
   }

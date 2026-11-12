@@ -4,7 +4,9 @@ class ALUModule extends StatelessWidget {
   final int registerA;
   final int registerB;
   final int sumRegister;
-  final bool subtract;
+
+  /// Operation selected by the control word, e.g. `A + B` or `A << 1`.
+  final String operation;
   final bool carryFlag;
   final bool zeroFlag;
   final bool isOutput;
@@ -15,7 +17,7 @@ class ALUModule extends StatelessWidget {
     required this.registerA,
     required this.registerB,
     required this.sumRegister,
-    required this.subtract,
+    required this.operation,
     required this.carryFlag,
     required this.zeroFlag,
     required this.isOutput,
@@ -92,10 +94,7 @@ class ALUModule extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      subtract ? 'A-B:' : 'A+B:',
-                      style: const TextStyle(fontSize: 11),
-                    ),
+                    Text('$operation:', style: const TextStyle(fontSize: 11)),
                     Text(
                       '$sumRegister',
                       style: const TextStyle(
