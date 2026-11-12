@@ -1,14 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/assembler.dart';
 import '../../core/builtin_program_list.dart';
 import '../../core/cpu_mode.dart';
+import '../board/glass_widgets.dart';
+import '../theme/glass.dart';
 import 'assembly_text_editing_controller.dart';
 import 'builtin_program_browser_dialog.dart';
 import 'instruction_set_dialog.dart';
 
 class ProgramEditor extends StatefulWidget {
-  final Function(List<int> program, bool hasError) onAssemble;
+  /// Called after each assembly with its result, or null on an error.
+  final ValueChanged<AssemblyResult?> onAssemble;
   final String? initialProgram;
 
   /// RAM address of the instruction being executed; its source line is
@@ -22,9 +27,6 @@ class ProgramEditor extends StatefulWidget {
   /// Address of the instruction on the cursor line, or null, reported when
   /// it changes; used for run-to-cursor.
   final ValueChanged<int?>? onCursorAddressChanged;
-
-  /// Extra buttons shown in the header, next to the status icon.
-  final List<Widget> headerActions;
 
   /// Machine the program is assembled for.
   final CpuMode mode;
@@ -40,7 +42,6 @@ class ProgramEditor extends StatefulWidget {
     this.currentAddress,
     this.onBreakpointsChanged,
     this.onCursorAddressChanged,
-    this.headerActions = const [],
     this.mode = CpuMode.classic,
     this.onModeChanged,
   });
@@ -58,6 +59,28 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
   late final ScrollController _scrollController;
   late final ScrollController _lineNumberScrollController;
+  final ScrollController _horizontalScrollController = ScrollController();
+
+  static const TextStyle _codeStyle = TextStyle(
+    fontFamily: Glass.mono,
+    fontSize: 13,
+    color: Glass.text,
+    height: 1.57,
+  );
+
+  /// Width the code needs without wrapping: its longest line, measured.
+  double get _codeWidth {
+    final longest = _editorController.text
+        .split('\n')
+        .fold('', (a, line) => line.length > a.length ? line : a);
+    final painter = TextPainter(
+      text: TextSpan(text: longest, style: _codeStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width + 40;
+  }
 
   bool _isLogTypeInfo = false;
   bool _isLogTypeError = false;
@@ -161,20 +184,24 @@ class _ProgramEditorState extends State<ProgramEditor> {
                 children: [
                   TextSpan(
                     text: listing.text.substring(0, listing.text.indexOf(' ')),
-                    style: TextStyle(color: Colors.grey[500]),
+                    style: const TextStyle(color: Glass.faint),
                   ),
                   TextSpan(
                     text: listing.text.substring(listing.text.indexOf(' ')),
                     style: TextStyle(
                       color: listing.isData
                           ? AssemblyTextEditingController.stringColor
-                          : Colors.teal[200],
+                          : Glass.synData,
                     ),
                   ),
                 ],
               ),
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 11, height: 1.5 * 13 / 11),
+              style: const TextStyle(
+                fontFamily: Glass.mono,
+                fontSize: 11,
+                height: 1.5 * 13 / 11,
+              ),
             ),
     );
     return listing == null
@@ -202,7 +229,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
     );
     _editorController.addListener(_reportCursor);
     _errorMessageController = TextEditingController(
-      text: '[NORMAL] Initialized!',
+      text: 'Write a program or open a built-in one, then assemble.',
     );
     _scrollController = ScrollController();
     _lineNumberScrollController = ScrollController();
@@ -221,8 +248,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
         _errorLine = null;
       });
       _errorMessageController.text =
-          '[NORMAL] ${widget.mode.label} CPU: ${widget.mode.description}.\n'
-          '[NORMAL] RAM cleared. Please assemble again.';
+          '${widget.mode.label} CPU: ${widget.mode.description}. '
+          'RAM cleared: assemble again.';
       _setLogTypeNormal();
       _reportBreakpoints();
       _reportCursor();
@@ -269,6 +296,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
     _errorMessageController.dispose();
     _scrollController.dispose();
     _lineNumberScrollController.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -284,11 +312,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
         _errorLine = null;
       });
       _errorMessageController.text =
-          '[INFO] Assembled for ${widget.mode.label}: ${program.length} of '
-          '${widget.mode.ramSize} bytes.\n'
-          '[INFO] See RAM\'s content in the CPU Board.';
+          'Assembled for ${widget.mode.label}: ${program.length} of '
+          '${widget.mode.ramSize} bytes, loaded into RAM.';
       _setLogTypeInfo();
-      widget.onAssemble(program, false);
+      widget.onAssemble(assembly);
       _reportBreakpoints();
       _reportCursor();
     } catch (e) {
@@ -297,9 +324,9 @@ class _ProgramEditorState extends State<ProgramEditor> {
         final line = e is AssemblerError ? e.line : null;
         _errorLine = line == null ? null : line - 1;
       });
-      _errorMessageController.text = '[ERROR] ${e.toString()}';
+      _errorMessageController.text = e.toString();
       _setLogTypeError();
-      widget.onAssemble([], true);
+      widget.onAssemble(null);
       _reportBreakpoints();
       _reportCursor();
     }
@@ -309,7 +336,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1a1a1a),
+        backgroundColor: Glass.panel,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: BuiltinProgramBrowserDialog(
           programs: _programs,
@@ -328,8 +355,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
             _updateLineCount();
             _reportBreakpoints();
             _errorMessageController.text =
-                '[NORMAL] Program loaded for the ${program.mode.label} CPU.\n'
-                '[NORMAL] Press ASSEMBLE & LOAD to put it in RAM.';
+                'Opened for the ${program.mode.label} CPU. '
+                'Assemble & load to put it in RAM.';
             _setLogTypeNormal();
           },
         ),
@@ -341,12 +368,43 @@ class _ProgramEditorState extends State<ProgramEditor> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1a1a1a),
+        backgroundColor: Glass.panel,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: InstructionSetDialog(mode: widget.mode),
       ),
     );
   }
+
+  Widget _codeField(String hintText) => Padding(
+    padding: const EdgeInsets.all(8),
+    child: TextField(
+      controller: _editorController,
+      scrollController: _scrollController,
+      maxLines: null,
+      expands: true,
+      style: _codeStyle,
+      cursorColor: Glass.bus,
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        hintText: hintText,
+        hintStyle: const TextStyle(color: Glass.faint),
+        contentPadding: EdgeInsets.zero,
+      ),
+      onChanged: (value) {
+        _updateLineCount();
+        setState(() {
+          isAssembled = false;
+          _errorLine = null;
+          _breakpointLines.removeWhere((line) => line >= _lineCount);
+        });
+        _reportBreakpoints();
+        _reportCursor();
+        _errorMessageController.text =
+            'Program modified. Assemble again to load it.';
+        _setLogTypeNormal();
+      },
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -368,151 +426,116 @@ class _ProgramEditorState extends State<ProgramEditor> {
     // Picked up by buildTextSpan when the TextField below rebuilds.
     _editorController.highlightedLine = highlightedLine;
 
+    final status = _isLogTypeError
+        ? ('error', Glass.led)
+        : isAssembled
+        ? (
+            'assembled · ${_assembly?.machineCode.length ?? 0} of '
+                '${widget.mode.ramSize} bytes',
+            Glass.okText,
+          )
+        : ('not assembled', Glass.muted);
+
     return Container(
-      width: 460,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
-        borderRadius: BorderRadius.circular(8),
+        color: Glass.panel,
+        borderRadius: BorderRadius.circular(Glass.radius),
         border: Border.all(
           color: _isLogTypeError
-              ? Colors.red
+              ? Glass.led
               : isAssembled
-              ? Colors.green
-              : Colors.blue.withValues(alpha: 0.5),
-          strokeAlign: BorderSide.strokeAlignOutside,
-          width: 2,
+              ? const Color(0xFF1F4D3A)
+              : Glass.border,
         ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PROGRAM EDITOR (ASSEMBLER)',
-                    style: TextStyle(
-                      color: Colors.blue,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Generate machine code from assembly code',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-
-              Row(
-                children: [
-                  ...widget.headerActions,
-                  const SizedBox(width: 6),
-                  Icon(
-                    _isLogTypeError
-                        ? Icons.error
-                        : isAssembled
-                        ? Icons.check_circle
-                        : Icons.code,
-                    color: _isLogTypeError
-                        ? Colors.red
-                        : isAssembled
-                        ? Colors.green
-                        : Colors.blue,
-                    size: 16,
-                  ),
-                ],
-              ),
+              const Expanded(child: Text('PROGRAM', style: Glass.panelTitle)),
+              Text(status.$1, style: TextStyle(fontSize: 12, color: status.$2)),
             ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            height: 455,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: (_lineCount > 99 ? 44 : 34) + _listingWidth,
-                  height: 455,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    border: Border(right: BorderSide(color: Colors.grey[800]!)),
-                  ),
-                  child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(
-                      context,
-                    ).copyWith(scrollbars: false),
-                    child: SingleChildScrollView(
-                      controller: _lineNumberScrollController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: List.generate(
-                          _lineCount,
-                          (index) => GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => _toggleBreakpoint(index),
-                            child: Tooltip(
-                              message: 'Toggle breakpoint',
-                              waitDuration: const Duration(seconds: 1),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: _breakpointLines.contains(index)
-                                          ? Colors.red
-                                          : Colors.transparent,
+          const SizedBox(height: 10),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Glass.ground,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Glass.borderSoft),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: (_lineCount > 99 ? 44 : 34) + _listingWidth,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 4,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Glass.sunken,
+                      border: Border(
+                        right: BorderSide(color: Glass.borderSoft),
+                      ),
+                    ),
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(
+                        context,
+                      ).copyWith(scrollbars: false),
+                      child: SingleChildScrollView(
+                        controller: _lineNumberScrollController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: List.generate(
+                            _lineCount,
+                            (index) => GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _toggleBreakpoint(index),
+                              child: Tooltip(
+                                message: 'Toggle breakpoint',
+                                waitDuration: const Duration(seconds: 1),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _breakpointLines.contains(index)
+                                            ? Glass.led
+                                            : Colors.transparent,
+                                      ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      '${index + 1}',
-                                      textAlign: TextAlign.right,
-                                      style: index == _errorLine
-                                          ? const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.red,
-                                              fontWeight: FontWeight.bold,
-                                              height: 1.5,
-                                            )
-                                          : index == highlightedLine
-                                          ? const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.amber,
-                                              fontWeight: FontWeight.bold,
-                                              height: 1.5,
-                                            )
-                                          : TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.grey[600],
-                                              height: 1.5,
-                                            ),
+                                    Expanded(
+                                      child: Text(
+                                        '${index + 1}',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontFamily: Glass.mono,
+                                          fontSize: 13,
+                                          height: 1.5,
+                                          fontWeight:
+                                              index == _errorLine ||
+                                                  index == highlightedLine
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: index == _errorLine
+                                              ? Glass.led
+                                              : index == highlightedLine
+                                              ? Glass.bus
+                                              : Glass.faint,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  _listingCell(index),
-                                ],
+                                    _listingCell(index),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -520,155 +543,83 @@ class _ProgramEditorState extends State<ProgramEditor> {
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: TextField(
-                      controller: _editorController,
-                      scrollController: _scrollController,
-                      maxLines: null,
-                      expands: true,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.white,
-                        height: 1.57,
+                  // Lines never wrap, so each stays level with its number in
+                  // the gutter; long lines scroll sideways instead.
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => Scrollbar(
+                        controller: _horizontalScrollController,
+                        child: SingleChildScrollView(
+                          controller: _horizontalScrollController,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: math.max(constraints.maxWidth, _codeWidth),
+                            child: _codeField(hintText),
+                          ),
+                        ),
                       ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: hintText,
-                        hintStyle: TextStyle(color: Colors.grey),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      onChanged: (value) {
-                        _updateLineCount();
-                        setState(() {
-                          isAssembled = false;
-                          _errorLine = null;
-                          _breakpointLines.removeWhere(
-                            (line) => line >= _lineCount,
-                          );
-                        });
-                        _reportBreakpoints();
-                        _reportCursor();
-                        _errorMessageController.text =
-                            '[NORMAL] Program modified!\n[NORMAL] Please assemble again.';
-                        _setLogTypeNormal();
-                      },
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Assembler Logs',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            readOnly: true,
-            controller: _errorMessageController,
-            maxLines: 3,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isLogTypeError
-                  ? Colors.red[600]!
-                  : _isLogTypeInfo
-                  ? Colors.green[600]!
-                  : Colors.white60,
-              height: 1.57,
-            ),
-            decoration: InputDecoration(
-              fillColor: Colors.black,
-              filled: true,
-              enabledBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.white12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.white12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              hintStyle: const TextStyle(color: Colors.grey),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 12,
+                ],
               ),
             ),
-            onChanged: (value) {
-              setState(() {});
-            },
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(
+          const SizedBox(height: 10),
+          GlassButton(
+            label: 'Assemble & load',
+            height: 44,
+            fill: Glass.ok,
+            foreground: const Color(0xFF04140C),
             onPressed: _assembleProgram,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            child: const Text(
-              'ASSEMBLE & LOAD',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _openProgramBrowserDialog,
-                    icon: const Icon(Icons.folder_open, size: 16),
-                    label: const Text('Browse Built-In Programs'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.withValues(alpha: 0.2),
-                      foregroundColor: Colors.blue,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                        side: BorderSide(
-                          color: Colors.blue.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: GlassButton(
+                  label: 'Built-in programs',
+                  icon: Icons.folder_open,
+                  onPressed: _openProgramBrowserDialog,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GlassButton(
+                  label: 'Instruction set',
+                  icon: Icons.menu_book_outlined,
+                  onPressed: _openInstructionSetDialog,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Semantics(
+            liveRegion: true,
+            label: 'Assembler log',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Glass.ground,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _errorMessageController,
+                builder: (context, value, _) => Text(
+                  value.text,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: Glass.mono,
+                    fontSize: 11.5,
+                    height: 1.6,
+                    color: _isLogTypeError
+                        ? Glass.led
+                        : _isLogTypeInfo
+                        ? Glass.okText
+                        : Glass.muted,
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _openInstructionSetDialog,
-                    icon: const Icon(Icons.edit_document, size: 16),
-                    label: const Text('See Instruction Set Reference'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.withValues(alpha: 0.2),
-                      foregroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                        side: BorderSide(
-                          color: Colors.green.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],

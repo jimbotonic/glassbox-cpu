@@ -2,13 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'core/assembler.dart';
 import 'core/cpu.dart';
 import 'core/cpu_mode.dart';
 import 'cpu_layout.dart';
+import 'ui/theme/glass.dart';
 
 /// Drives the [Cpu] with a clock and shows its state. All CPU behaviour
-/// lives in [Cpu] and [Microcode]; this widget handles timing, the manual
-/// controls, breakpoints, step-back history and the bus animation.
+/// lives in [Cpu] and [Microcode]; this widget handles timing, stepping,
+/// breakpoints, step-back history and the output history.
 class CPUBoard extends StatefulWidget {
   const CPUBoard({super.key});
 
@@ -16,7 +18,10 @@ class CPUBoard extends StatefulWidget {
   State<CPUBoard> createState() => _CPUBoardState();
 }
 
-class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
+/// A state saved before a step, for step-back.
+typedef _HistoryEntry = ({CpuSnapshot snapshot, int outputCount});
+
+class _CPUBoardState extends State<CPUBoard> {
   final Cpu cpu = Cpu();
 
   // Clock
@@ -25,7 +30,6 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   bool clockHigh = false;
   bool isRunning = false;
   double clockSpeed = 2.0;
-  bool manualMode = false;
 
   // Debugging
   Set<int> breakpoints = {}; // instruction addresses
@@ -34,36 +38,28 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   int ticksSinceRun = 0; // lets Run continue from a breakpoint
 
   /// States before each step, newest last, for step-back.
-  final List<CpuSnapshot> history = [];
+  final List<_HistoryEntry> history = [];
   static const int _historyLimit = 2000;
+
+  /// Source map of the loaded program, or null.
+  AssemblyResult? assembly;
+
+  /// Every value written to the output register since the last reset.
+  final List<int> outputs = [];
 
   // View
   bool detailedView = true;
 
-  // Animation
-  late AnimationController busAnimationController;
-  late Animation<double> busAnimation;
-
   @override
   void initState() {
     super.initState();
-
-    busAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-
-    busAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(busAnimationController);
+    cpu.onOutput = outputs.add;
   }
 
   @override
   void dispose() {
     clockTimer?.cancel();
     singleStepTimer?.cancel();
-    busAnimationController.dispose();
     super.dispose();
   }
 
@@ -81,11 +77,19 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     runTarget = null;
   }
 
-  void _onLoadProgram(List<int> program) {
+  void _clearRun() {
+    _stopClock();
+    history.clear();
+    outputs.clear();
+  }
+
+  void _onAssemble(AssemblyResult? result) {
     setState(() {
-      _stopClock();
-      history.clear();
-      cpu.load(program);
+      assembly = result;
+      if (result != null) {
+        _clearRun();
+        cpu.load(result.machineCode);
+      }
     });
   }
 
@@ -94,8 +98,8 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   void _onModeChanged(CpuMode mode) {
     if (mode == cpu.mode) return;
     setState(() {
-      _stopClock();
-      history.clear();
+      _clearRun();
+      assembly = null;
       breakpoints = {};
       cursorAddress = null;
       cpu.setMode(mode);
@@ -104,8 +108,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
 
   void _onReset() {
     setState(() {
-      _stopClock();
-      history.clear();
+      _clearRun();
       cpu.reset(); // restarts the loaded program rather than wiping RAM
     });
   }
@@ -174,13 +177,15 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   }
 
   /// Manual step: one micro-step (clock cycle), or with [wholeInstruction]
-  /// every remaining micro-step of the current instruction.
+  /// every remaining micro-step of the current instruction. Stepping while
+  /// running pauses first.
   void _onClockSingleStep({bool wholeInstruction = false}) {
     // Ignore presses while the previous step is still pending, otherwise a
     // double press runs two steps back to back.
     if (cpu.halted || singleStepTimer != null) return;
 
     setState(() {
+      if (isRunning) _stopClock();
       clockHigh = true;
     });
     singleStepTimer = Timer(const Duration(milliseconds: 100), () {
@@ -193,21 +198,20 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
     });
   }
 
-  /// Saves the state for step-back, runs [advance] on the CPU, and animates
-  /// the bus if it carried a value.
+  /// Saves the state for step-back, then runs [advance] on the CPU.
   void _advance(void Function() advance) {
-    history.add(cpu.snapshot());
+    history.add((snapshot: cpu.snapshot(), outputCount: outputs.length));
     if (history.length > _historyLimit) history.removeAt(0);
     advance();
-    if (cpu.busActive) {
-      busAnimationController.forward(from: 0);
-    }
   }
 
   void _onStepBack() {
     if (history.isEmpty || singleStepTimer != null) return;
     setState(() {
-      cpu.restore(history.removeLast());
+      if (isRunning) _stopClock();
+      final entry = history.removeLast();
+      cpu.restore(entry.snapshot);
+      outputs.removeRange(entry.outputCount, outputs.length);
       clockHigh = false;
     });
   }
@@ -215,15 +219,15 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0a0a0a),
+      backgroundColor: Glass.ground,
       body: CPULayout(
         cpu: cpu,
+        assembly: assembly,
+        outputs: outputs,
         clockHigh: clockHigh,
         isRunning: isRunning,
         clockSpeed: clockSpeed,
-        manualMode: manualMode,
         detailedView: detailedView,
-        busAnimation: busAnimation,
         highlightAddress: _highlightAddress,
         onClockToggle: _onClockToggle,
         onClockSingleStep: _onClockSingleStep,
@@ -242,12 +246,6 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
             }
           });
         },
-        onClockManualModeChanged: (manual) {
-          setState(() {
-            if (manual) _stopClock();
-            manualMode = manual;
-          });
-        },
         onReset: _onReset,
         onModeChanged: _onModeChanged,
         onDetailedViewChanged: (detailed) {
@@ -256,7 +254,7 @@ class _CPUBoardState extends State<CPUBoard> with TickerProviderStateMixin {
         onRamEdit: (address, value) {
           setState(() => cpu.writeRam(address, value));
         },
-        onLoadProgram: _onLoadProgram,
+        onAssemble: _onAssemble,
         onBreakpointsChanged: (addresses) {
           setState(() => breakpoints = addresses);
         },

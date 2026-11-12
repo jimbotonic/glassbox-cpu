@@ -41,6 +41,15 @@ class StepInfo {
   /// Other effects: counter increment, flags, halt.
   final List<String> effects;
 
+  /// Label of the bus source, e.g. `RAM[0xE]`, or null.
+  final String? sourceLabel;
+
+  /// Labels of the modules that latch the bus, e.g. `A`.
+  final List<String> destinationLabels;
+
+  /// Value on the bus this step (meaningful when [source] is not null).
+  final int busValue;
+
   const StepInfo({
     required this.step,
     required this.controlWord,
@@ -49,6 +58,9 @@ class StepInfo {
     required this.destinations,
     required this.transfer,
     required this.effects,
+    this.sourceLabel,
+    this.destinationLabels = const [],
+    this.busValue = 0,
   });
 
   String get stepLabel => step == null ? '--' : 'T$step';
@@ -148,6 +160,9 @@ class StepInfo {
       destinations: destinations,
       transfer: transfer,
       effects: effects,
+      sourceLabel: sourceLabel,
+      destinationLabels: destinationLabels,
+      busValue: cpu.bus,
     );
   }
 

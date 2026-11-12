@@ -25,11 +25,15 @@ class AssemblyResult {
   /// Labels and `.equ` constants, keyed by upper-case name.
   final Map<String, int> symbols;
 
+  /// Labels only (no `.equ`), keyed by address, as written in the source.
+  final Map<int, String> labels;
+
   const AssemblyResult(
     this.machineCode,
     this.sourceLines, {
     this.dataAddresses = const {},
     this.symbols = const {},
+    this.labels = const {},
   });
 
   /// Source line of the byte at [address], or null if there is none.
@@ -115,12 +119,14 @@ class Assembler {
   AssemblyResult assembleWithSourceMap(String source) {
     final statements = _parse(source);
     final symbols = <String, int>{};
+    final labels = <int, String>{};
 
     // Pass 1: give every label an address and every constant its value.
     int address = 0;
     for (final s in statements) {
       if (s.label != null) {
         _define(symbols, s.label!, address, s.line);
+        labels.putIfAbsent(address, () => s.label!);
       }
       switch (s.keyword) {
         case null:
@@ -177,6 +183,7 @@ class Assembler {
       sourceLines,
       dataAddresses: dataAddresses,
       symbols: symbols,
+      labels: labels,
     );
   }
 

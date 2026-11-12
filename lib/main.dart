@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'cpu_board.dart';
+import 'ui/theme/glass.dart';
 
 void main() {
   runApp(const CPUSimulatorApp());
@@ -15,8 +16,7 @@ class CPUSimulatorApp extends StatelessWidget {
     return MaterialApp(
       title: '8-bit CPU Simulator',
       theme: ThemeData(
-        fontFamily: 'GoogleSansCode',
-        scaffoldBackgroundColor: const Color(0xFF0a0a0a),
+        scaffoldBackgroundColor: Glass.ground,
         brightness: Brightness.dark,
       ),
       home: const _App(),
