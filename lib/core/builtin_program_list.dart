@@ -102,7 +102,7 @@ HLT          ; Halt''',
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #1       ; Load 1
 STA 0xD      ; Store inc
-STA 0xF      ; Store n (reuse A=1)
+STA 0xF      ; n = 1 (A is 1)
 LDI #0       ; sum = 0
 STA 0xE      ; Store sum
 LDA 0xE      ; Load sum
@@ -172,12 +172,12 @@ HLT          ; Halt''',
           'instead of raw addresses',
       category: BuiltinProgramCategory.controlFlow,
       code: '''; Labels replace raw addresses
-.equ START 10      ; Named constant
+.equ START 10 ; Named constant
 
 loop:  LDA count   ; Load counter
        OUT         ; Show it
        SUB one     ; Subtract 1
-       STA count   ; Store it back
+       STA count   ; Store back
        JZ  done    ; Stop at 0
        JMP loop    ; Repeat
 done:  HLT         ; Halt
@@ -217,7 +217,7 @@ LDA 0xF      ; Load
 OUT          ; Output
 ADD 0xE      ; Add 5
 STA 0xF      ; Store
-JC 0xA       ; Jump to halt, if carry flag is set
+JC 0xA       ; Halt on carry
 JMP 0x4      ; Loop
 HLT          ; Halt''',
     ),
@@ -242,11 +242,13 @@ JMP 0x0      ; Loop''',
           'Extended CPU',
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
-      code: '''; Extended CPU: 8-bit immediates, two-byte instructions
-        LDI 10        ; A = 10 (opcode byte + value byte)
+      code: '''; Extended CPU: 8-bit immediates
+; and two-byte instructions
+        ; Opcode byte + value byte
+        LDI 10        ; A = 10
 loop:   OUT           ; Show A
-        SBI 1         ; A = A - 1, sets the zero flag
-        JNZ loop      ; Repeat while A is not 0
+        SBI 1         ; A-1, sets Z
+        JNZ loop      ; Until A = 0
         HLT''',
     ),
 
@@ -257,19 +259,23 @@ loop:   OUT           ; Show A
           'each character code: 72 69 76 76 79. Extended CPU',
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
-      code: '''; Extended CPU: indexed load walks a string
-loop:   LDB ptr       ; B = address of the next character
+      code: '''; Extended CPU: an indexed load
+; walks a string
+        ; B = next char's address
+loop:   LDB ptr
         LDA [B]       ; A = RAM[B]
-        CMP zero      ; End of string? (sets Z, A unchanged)
+        ; End of string? (sets Z,
+        ; A unchanged)
+        CMP zero
         JZ  done
-        OUT           ; Show the character code
-        LDA ptr       ; ptr = ptr + 1
+        OUT           ; Char code
+        LDA ptr       ; ptr + 1
         ADI 1
         STA ptr
         JMP loop
 done:   HLT
 
-ptr:    .db msg       ; Pointer to the string
+ptr:    .db msg       ; → string
 zero:   .db 0
 msg:    .db "HELLO", 0''',
     ),
@@ -281,14 +287,17 @@ msg:    .db "HELLO", 0''',
           'reverse, 3 2 1. Extended CPU',
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
-      code: '''; Extended CPU: the stack grows down from 0xFF
+      code: '''; Extended CPU: the stack grows
+; down from 0xFF
         LDI 1
-        PUSH          ; RAM[SP] = A, SP = SP - 1
+        ; RAM[SP] = A, SP = SP - 1
+        PUSH
         LDI 2
         PUSH
         LDI 3
         PUSH
-        POP           ; SP = SP + 1, A = RAM[SP]
+        ; SP = SP + 1, A = RAM[SP]
+        POP
         OUT           ; 3
         POP
         OUT           ; 2
@@ -303,21 +312,25 @@ msg:    .db "HELLO", 0''',
           'A shift-and-add multiply subroutine: 13 × 11 = 143. Extended CPU',
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
-      code: '''; Extended CPU: subroutine, shifts and masks
-        CALL multiply ; Push the return address, jump
+      code: '''; Extended CPU: a subroutine,
+; shifts and masks
+        ; Push return address, jump
+        CALL multiply
         OUT           ; 143
         HLT
 
-; result = x * y, one bit of y at a time
+; result = x * y, one bit of y
+; at a time
 multiply:
         LDI 0
         STA result
 next:   LDA y
-        CMP zero      ; No bits left?
+        CMP zero      ; y = 0?
         JZ  finish
-        AND one       ; Lowest bit of y
+        AND one       ; Low bit of y
         JZ  shift
-        LDA result    ; Bit set: result = result + x
+        ; Bit set: result += x
+        LDA result
         ADD x
         STA result
 shift:  LDA x         ; x = x * 2
@@ -328,7 +341,7 @@ shift:  LDA x         ; x = x * 2
         STA y
         JMP next
 finish: LDA result
-        RET           ; Pop the return address
+        RET           ; Pop, return
 
 x:      .db 13
 y:      .db 11
@@ -344,14 +357,15 @@ one:    .db 1''',
           'The carry flag catches the bit that falls off. Extended CPU',
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
-      code: '''; Extended CPU: shifts move a bit; carry says when it fell off
+      code: '''; Extended CPU: shifts move a bit;
+; the carry says when it fell off
 start:  LDI 1
 left:   OUT
-        SHL           ; Bit 7 goes into the carry
+        SHL           ; Bit 7 → C
         JNC left
         LDI 0x40
 right:  OUT
-        SHR           ; Bit 0 goes into the carry
+        SHR           ; Bit 0 → C
         JNC right
         LDI 2
         JMP left''',
@@ -368,27 +382,36 @@ right:  OUT
           'with OUT 2. A newline byte moves to line 2.',
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
-      code: '''; Text LCD: port 1 takes commands, port 2 characters
+      code: '''; Text LCD: port 1 takes commands,
+; port 2 characters
 .equ LCD_CMD 1
 .equ LCD_DATA 2
-        LDI 0x38      ; function set: 8-bit bus, 2 lines
+        ; function set: 8-bit bus,
+        ; 2 lines
+        LDI 0x38
         OUT LCD_CMD
-        LDI 0x0C      ; display on (it starts off), no cursor
+        ; display on (starts off),
+        ; no cursor
+        LDI 0x0C
         OUT LCD_CMD
-        LDI 0x01      ; clear, cursor to the top left
+        ; clear, cursor to top left
+        LDI 0x01
         OUT LCD_CMD
-loop:   LDB ptr       ; B = address of the next character
+        ; B = next char's address
+loop:   LDB ptr
         LDA [B]
-        CMP zero      ; end of the string?
+        CMP zero      ; end?
         JZ  done
-        CMP newline   ; newline: go to line 2
+        CMP newline   ; line 2?
         JZ  line2
-        OUT LCD_DATA  ; show it; the cursor moves right
+        ; show it; the cursor moves
+        OUT LCD_DATA
 next:   LDA ptr
         ADI 1
         STA ptr
         JMP loop
-line2:  LDI 0xC0      ; DDRAM address 0x40: start of line 2
+        ; DDRAM address 0x40: line 2
+line2:  LDI 0xC0
         OUT LCD_CMD
         JMP next
 done:   HLT
@@ -405,18 +428,23 @@ msg:     .db "Hello, world!\\nGlassBox CPU", 0''',
           'words: "I <heart> CPU".',
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
-      code: '''; Custom LCD character: 8 rows of 5 pixels in CGRAM
+      code: '''; Custom LCD character: 8 rows
+; of 5 pixels in CGRAM
 .equ LCD_CMD 1
 .equ LCD_DATA 2
-        LDI 0x38      ; 8-bit bus, 2 lines
+        ; 8-bit bus, 2 lines
+        LDI 0x38
         OUT LCD_CMD
         LDI 0x0C      ; display on
         OUT LCD_CMD
         LDI 0x01      ; clear
         OUT LCD_CMD
-        LDI 0x40      ; CGRAM address 0: character 0, top row
+        ; CGRAM address 0: char 0,
+        ; top row
+        LDI 0x40
         OUT LCD_CMD
-glyph:  LDB gptr      ; write the heart, one row per byte
+        ; the heart, a row per byte
+glyph:  LDB gptr
         LDA [B]
         OUT LCD_DATA
         LDA gptr
@@ -424,13 +452,18 @@ glyph:  LDB gptr      ; write the heart, one row per byte
         STA gptr
         LDA count
         SBI 1
-        STA count     ; STA keeps the flags from SBI
+        ; STA keeps SBI's flags
+        STA count
         JNZ glyph
-        LDI 0x80      ; back to DDRAM: line 1, column 0
+        ; back to DDRAM: line 1,
+        ; column 0
+        LDI 0x80
         OUT LCD_CMD
 text:   LDB tptr
         LDA [B]
-        CMP end       ; 0xFF ends the text: 0 is the heart
+        ; 0xFF ends the text;
+        ; 0 is the heart
+        CMP end
         JZ  done
         OUT LCD_DATA
         LDA tptr
@@ -453,14 +486,19 @@ msg:    .db "I ", 0, " CPU", 0xFF''',
           'moves to the next row after each one.',
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
-      code: '''; LED matrix: port 3 selects a row, port 4 lights it
+      code: '''; LED matrix: port 3 selects a row,
+; port 4 lights it
 .equ ROW 3
 .equ PIXELS 4
         LDI 0
-        OUT ROW       ; start at the top row
+        OUT ROW       ; top row
 loop:   LDB ptr
-        LDA [B]       ; one row: bit 7 is the left column
-        OUT PIXELS    ; the matrix then moves to the next row
+        ; one row: bit 7 is the
+        ; left column
+        LDA [B]
+        ; the matrix then moves to
+        ; the next row
+        OUT PIXELS
         LDA ptr
         ADI 1
         STA ptr
@@ -482,22 +520,30 @@ face:   .db 0b00111100, 0b01000010, 0b10100101, 0b10000001
           'and the display. Runs until reset; try a faster clock.',
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
-      code: '''; Keypad on port 5: IN gives the ASCII code of the last
-; key pressed, once, or 0 when no key is waiting.
+      code: '''; Keypad on port 5: IN gives the
+; ASCII code of the last key
+; pressed, once, or 0 when no key
+; is waiting.
 .equ LCD_CMD 1
 .equ LCD_DATA 2
 .equ KEYPAD 5
-        LDI 0x38      ; 8-bit bus, 2 lines
+        ; 8-bit bus, 2 lines
+        LDI 0x38
         OUT LCD_CMD
-        LDI 0x0E      ; display on, cursor on
+        ; display on, cursor on
+        LDI 0x0E
         OUT LCD_CMD
         LDI 0x01      ; clear
         OUT LCD_CMD
-wait:   IN  KEYPAD    ; A = key, or 0
-        CMP zero      ; IN sets no flags: compare to test it
-        JZ  wait      ; nothing yet: ask again
-        OUT LCD_DATA  ; ASCII goes straight to the LCD
-        OUT           ; and to the display (port 0)
+wait:   IN  KEYPAD    ; key or 0
+        ; IN sets no flags, so
+        ; compare to test
+        CMP zero
+        JZ  wait      ; none yet
+        ; ASCII goes straight to
+        ; the LCD
+        OUT LCD_DATA
+        OUT           ; and port 0
         JMP wait
 
 zero:   .db 0''',
