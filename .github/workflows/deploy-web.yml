@@ -7,7 +7,7 @@
 # One-time setup:
 #   1. Create the Pages project (production branch: main), in the
 #      Cloudflare dashboard or with
-#        npx wrangler pages project create glassbox-cpu --production-branch main
+#        npx wrangler pages project create glassbox --production-branch main
 #   2. In the GitHub repo, Settings > Secrets and variables > Actions, add
 #        CLOUDFLARE_API_TOKEN   an API token with "Cloudflare Pages: Edit"
 #        CLOUDFLARE_ACCOUNT_ID  shown in the dashboard sidebar
@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 env:
-  PAGES_PROJECT: glassbox-cpu
+  PAGES_PROJECT: glassbox
 
 jobs:
   build:
