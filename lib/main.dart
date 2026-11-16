@@ -14,7 +14,7 @@ class CPUSimulatorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '8-bit CPU Simulator',
+      title: 'GlassBox CPU Simulator',
       theme: ThemeData(
         scaffoldBackgroundColor: Glass.ground,
         brightness: Brightness.dark,

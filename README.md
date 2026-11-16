@@ -1,16 +1,16 @@
-# 8-bit CPU Simulator
+# GlassBox CPU Simulator
 
 An interactive visual simulator of a simple 8-bit CPU architecture, built entirely with Flutter. This educational tool helps you understand how computers work at the fundamental level by visualizing CPU operations, registers, memory, and the flow of data through the system.
 
-Live Demo: [cpu.devmuaz.com](https://cpu.devmuaz.com)
+Live demo: [glassbox.dubuisson.ch](https://glassbox.dubuisson.ch)
 
 ## Preview
-<img width="1455" height="914" alt="8-bit CPU Simulator" src="https://github.com/user-attachments/assets/3062b563-9934-4d44-aa33-f08776b2b823" />
+<img width="1455" height="914" alt="GlassBox CPU Simulator" src="https://github.com/user-attachments/assets/3062b563-9934-4d44-aa33-f08776b2b823" />
 
 
 ## Table of Contents
 
-- [8-bit CPU Simulator](#8-bit-cpu-simulator)
+- [GlassBox CPU Simulator](#glassbox-cpu-simulator)
   - [Preview](#preview)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)

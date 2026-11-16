@@ -1,11 +1,11 @@
 {
-  "name": "8-bit-cpu-simulator",
-  "short_name": "8-bit-cpu-simulator",
+  "name": "GlassBox CPU Simulator",
+  "short_name": "GlassBox CPU",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",
-  "description": "8-bit CPU Simulator",
+  "description": "An 8-bit computer you can see through",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [
