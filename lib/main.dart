@@ -18,6 +18,19 @@ class CPUSimulatorApp extends StatelessWidget {
       theme: ThemeData(
         scaffoldBackgroundColor: Glass.ground,
         brightness: Brightness.dark,
+        tooltipTheme: TooltipThemeData(
+          decoration: BoxDecoration(
+            color: Glass.raised,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Glass.border),
+          ),
+          textStyle: const TextStyle(color: Glass.text, fontSize: 12),
+        ),
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: Glass.bus,
+          selectionColor: Glass.drive.withValues(alpha: 0.35),
+          selectionHandleColor: Glass.drive,
+        ),
       ),
       home: const _App(),
       debugShowCheckedModeBanner: false,
@@ -37,17 +50,41 @@ class _App extends StatelessWidget {
     final height = size.height;
 
     if ((width < requiredWidth || height < requiredHeight) && kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
+        backgroundColor: Glass.ground,
         body: Center(
-          child: Text(
-            'Please, run the app in a full screen mode!\n'
-            'Required size: (width: ${requiredWidth}px, height: ${requiredHeight}px)',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Glass.panel,
+              borderRadius: BorderRadius.circular(Glass.radius),
+              border: Border.all(color: Glass.border),
             ),
-            textAlign: TextAlign.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('WINDOW TOO SMALL', style: Glass.dialogTitle),
+                const SizedBox(height: 8),
+                const Text(
+                  'GlassBox CPU shows the whole board at once. Make the '
+                  'window larger or switch to full screen.',
+                  style: TextStyle(
+                    color: Glass.textSoft,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Needs ${requiredWidth}x$requiredHeight px · now '
+                  '${width.round()}x${height.round()} px',
+                  style: Glass.code.copyWith(color: Glass.muted),
+                ),
+              ],
+            ),
           ),
         ),
       );

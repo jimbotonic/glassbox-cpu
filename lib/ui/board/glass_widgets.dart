@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/glass.dart';
@@ -334,5 +335,184 @@ class GlassButton extends StatelessWidget {
             waitDuration: const Duration(milliseconds: 500),
             child: button,
           );
+  }
+}
+
+/// Opens [child] in a dialog styled like a board panel.
+Future<T?> showGlassDialog<T>(BuildContext context, {required Widget child}) {
+  return showDialog<T>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.6),
+    builder: (context) => Dialog(
+      backgroundColor: Glass.panel,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Glass.radius),
+        side: const BorderSide(color: Glass.border),
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// Layout shared by every dialog: a panel title (in capitals, as given,
+/// so hex like `0x0F` keeps its case) with a note under it, a
+/// close button, a scrolling [body] and optional [actions] at the bottom.
+class GlassDialogFrame extends StatelessWidget {
+  final String title;
+  final String? note;
+  final double width;
+  final double? maxHeight;
+  final Widget body;
+  final List<Widget> actions;
+
+  /// Whether [body] scrolls; turn off for short dialogs with a text field.
+  final bool scrollable;
+
+  const GlassDialogFrame({
+    super.key,
+    required this.title,
+    this.note,
+    this.width = 480,
+    this.maxHeight,
+    required this.body,
+    this.actions = const [],
+    this.scrollable = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: width,
+        maxHeight: maxHeight ?? double.infinity,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: Glass.dialogTitle),
+                        if (note != null) ...[
+                          const SizedBox(height: 4),
+                          Text(note!, style: Glass.note),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GlassButton(
+                  icon: FluentIcons.dismiss_24_regular,
+                  tooltip: 'Close',
+                  height: 36,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (scrollable)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: SingleChildScrollView(child: body),
+                ),
+              )
+            else
+              Padding(padding: const EdgeInsets.only(right: 4), child: body),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    for (int i = 0; i < actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      actions[i],
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small caps heading inside a panel or dialog, e.g. `OPERAND TYPES`.
+class GlassSectionTitle extends StatelessWidget {
+  final String text;
+
+  const GlassSectionTitle(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(text.toUpperCase(), style: Glass.sectionTitle),
+  );
+}
+
+/// Sunken box for code samples, in the editor's colours.
+class GlassCodeBlock extends StatelessWidget {
+  final String code;
+
+  const GlassCodeBlock(this.code, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Glass.ground,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Glass.borderSoft),
+      ),
+      child: Text.rich(
+        _highlight(code),
+        style: Glass.code.copyWith(height: 1.5),
+      ),
+    );
+  }
+
+  /// Comments in grey italics; the rest as plain code.
+  static TextSpan _highlight(String code) {
+    final lines = code.split('\n');
+    return TextSpan(
+      children: [
+        for (int i = 0; i < lines.length; i++) ...[
+          if (i > 0) const TextSpan(text: '\n'),
+          ..._line(lines[i]),
+        ],
+      ],
+    );
+  }
+
+  static List<TextSpan> _line(String line) {
+    final comment = line.indexOf(';');
+    if (comment < 0) return [TextSpan(text: line)];
+    return [
+      TextSpan(text: line.substring(0, comment)),
+      TextSpan(
+        text: line.substring(comment),
+        style: const TextStyle(
+          color: Glass.synComment,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    ];
   }
 }

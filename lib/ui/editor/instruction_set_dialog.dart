@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cpu_mode.dart';
+import '../board/glass_widgets.dart';
+import '../theme/glass.dart';
 
 class InstructionSetDialog extends StatelessWidget {
   /// Machine in use; Extended mode adds its section first.
@@ -10,66 +12,32 @@ class InstructionSetDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 600,
-      constraints: const BoxConstraints(maxHeight: 700),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return GlassDialogFrame(
+      title: 'INSTRUCTION SET',
+      note: mode == CpuMode.extended
+          ? 'Every instruction of the Extended CPU, then the Classic ones it '
+                'keeps.'
+          : 'Every instruction of the Classic CPU, its operand and an '
+                'example.',
+      width: 640,
+      maxHeight: 720,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'INSTRUCTION SET REFERENCE',
-                style: TextStyle(
-                  color: Colors.blue,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.grey),
-                onPressed: () => Navigator.pop(context),
-                iconSize: 20,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Complete guide to all available opcodes and operand types',
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (mode == CpuMode.extended) ...[
-                    _buildExtendedSection(),
-                    const SizedBox(height: 20),
-                    Text(
-                      'CLASSIC INSTRUCTIONS (ALSO IN EXTENDED, WITH 8-BIT '
-                      'OPERANDS: ADDRESSES 0-255, VALUES -128..255)',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _buildOperandTypesSection(),
-                  const SizedBox(height: 20),
-                  _buildInstructionsSection(),
-                  const SizedBox(height: 20),
-                  const _SyntaxSection(),
-                ],
-              ),
+          if (mode == CpuMode.extended) ...[
+            _buildExtendedSection(),
+            const SizedBox(height: 20),
+            const GlassSectionTitle(
+              'Classic instructions, also in Extended with 8-bit operands '
+              '(addresses 0-255, values -128..255)',
             ),
-          ),
+            const SizedBox(height: 4),
+          ],
+          _buildOperandTypesSection(),
+          const SizedBox(height: 20),
+          _buildInstructionsSection(),
+          const SizedBox(height: 20),
+          const _SyntaxSection(),
         ],
       ),
     );
@@ -84,11 +52,11 @@ class InstructionSetDialog extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.cyan.withValues(alpha: 0.4)),
-            borderRadius: BorderRadius.circular(4),
-            color: Colors.cyan.withValues(alpha: 0.06),
+            color: Glass.busGround,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Glass.busBorder),
           ),
-          child: Text(
+          child: const Text(
             'EXTENDED CPU: 256 bytes of RAM. An instruction is an opcode '
             'byte, followed by an operand byte when it takes an address or '
             'a value; the CPU reads that byte at the program counter '
@@ -96,16 +64,15 @@ class InstructionSetDialog extends StatelessWidget {
             'others an address. The ALU always works on A and B, so ADD, '
             'SUB, AND, OR, XOR, CMP, ADI and SBI overwrite B. The stack '
             'grows down from 0xFF; keep code and data below it.',
-            style: TextStyle(color: Colors.grey[300], fontSize: 11),
+            style: TextStyle(color: Glass.textSoft, fontSize: 12, height: 1.5),
           ),
         ),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: DATA MOVEMENT', Colors.blue, [
+        _buildInstructionCategory('EXTENDED: DATA MOVEMENT', [
           const _InstructionInfo(
             mnemonic: 'LDB',
             hex: '0x0B',
             usage: 'LDB addr',
-            color: Colors.blue,
             description: 'Load B - Loads value from RAM into B register.',
             behavior:
                 'Reads RAM[addr] into B. Use it to set the index for LDA [B].',
@@ -116,7 +83,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'LDA [B]',
             hex: '0x30',
             usage: 'LDA [B]',
-            color: Colors.blue,
             description: 'Indexed load - Loads from the address held in B.',
             behavior:
                 'B drives the bus into MAR (BO|MI), then RAM goes into A '
@@ -126,12 +92,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: ALU', Colors.teal, [
+        _buildInstructionCategory('EXTENDED: ALU', [
           const _InstructionInfo(
             mnemonic: 'ADI',
             hex: '0x0C',
             usage: 'ADI #val',
-            color: Colors.teal,
             description: 'Add Immediate - A = A + val.',
             behavior: 'The value goes into B, then A + B into A. Sets C and Z.',
             operandType: imm,
@@ -141,7 +106,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'SBI',
             hex: '0x0D',
             usage: 'SBI #val',
-            color: Colors.teal,
             description: 'Subtract Immediate - A = A - val.',
             behavior: 'Like ADI, subtracting. C is set on a borrow.',
             operandType: imm,
@@ -151,7 +115,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'AND / OR / XOR',
             hex: '0x10-0x12',
             usage: 'AND addr',
-            color: Colors.teal,
             description: 'Bitwise logic - A = A op RAM[addr].',
             behavior: 'Bit by bit on A and B. Clears C, sets Z.',
             operandType: addr,
@@ -161,7 +124,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'CMP',
             hex: '0x13',
             usage: 'CMP addr',
-            color: Colors.teal,
             description: 'Compare - Computes A - RAM[addr] for the flags only.',
             behavior:
                 'A is unchanged. Z = 1 when equal; C = 1 when A is smaller.',
@@ -172,7 +134,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'SHL / SHR',
             hex: '0x14 / 0x15',
             usage: 'SHL',
-            color: Colors.teal,
             description: 'Shift A left or right by one bit.',
             behavior:
                 'The bit shifted out goes into C; a 0 comes in. SHL doubles, '
@@ -181,12 +142,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: JUMPS & STACK', Colors.orange, [
+        _buildInstructionCategory('EXTENDED: JUMPS & STACK', [
           const _InstructionInfo(
             mnemonic: 'JNZ / JNC',
             hex: '0x0A / 0x09',
             usage: 'JNZ addr',
-            color: Colors.orange,
             description: 'Jump if Not Zero / Not Carry.',
             behavior:
                 'Jumps when the flag is 0. Otherwise one step (CE) skips the '
@@ -198,7 +158,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'PUSH / POP',
             hex: '0x20 / 0x21',
             usage: 'PUSH',
-            color: Colors.orange,
             description: 'Save A on the stack / restore it.',
             behavior:
                 'PUSH writes A at RAM[SP] then SP = SP - 1. POP does SP = SP '
@@ -209,7 +168,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'CALL',
             hex: '0x22',
             usage: 'CALL addr',
-            color: Colors.orange,
             description: 'Call a subroutine.',
             behavior:
                 'Pushes PC (the address of its own operand byte), then jumps '
@@ -221,7 +179,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'RET',
             hex: '0x23',
             usage: 'RET',
-            color: Colors.orange,
             description: 'Return from a subroutine.',
             behavior:
                 'Pops the saved PC, then steps past the CALL\'s operand byte '
@@ -235,21 +192,12 @@ class InstructionSetDialog extends StatelessWidget {
 
   Widget _buildOperandTypesSection() {
     return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'OPERAND TYPES',
-          style: TextStyle(
-            color: Colors.amber,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 8),
+        GlassSectionTitle('Operand types'),
         _OperandTypeCard(
           prefix: '#',
           name: 'Immediate Value',
-          color: Color(0xFFB5CEA8),
           example: 'LDI #5',
           description:
               'A literal value (0-15) loaded directly into the register. '
@@ -259,7 +207,6 @@ class InstructionSetDialog extends StatelessWidget {
         _OperandTypeCard(
           prefix: '0x',
           name: 'Hexadecimal Address',
-          color: Color(0xFFB5CEA8),
           example: 'LDA 0xE',
           description:
               'A memory address in hexadecimal format (0x0-0xF). '
@@ -269,7 +216,6 @@ class InstructionSetDialog extends StatelessWidget {
         _OperandTypeCard(
           prefix: '',
           name: 'Decimal Address',
-          color: Color(0xFFD4D4AA),
           example: 'LDA 14',
           description:
               'A memory address in decimal format (0-15). '
@@ -283,12 +229,11 @@ class InstructionSetDialog extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInstructionCategory('CONTROL FLOW', Colors.grey, [
+        _buildInstructionCategory('CONTROL FLOW', [
           const _InstructionInfo(
             mnemonic: 'NOP',
             hex: '0x0',
             usage: 'NOP',
-            color: Colors.grey,
             description: 'No Operation - Does nothing, uses one clock cycle.',
             behavior:
                 'The program counter increments but no data is moved or modified.',
@@ -298,7 +243,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'HLT',
             hex: '0xF',
             usage: 'HLT',
-            color: Colors.red,
             description: 'Halt - Stops program execution.',
             behavior:
                 'The clock stops and the CPU enters a halted state. No further instructions execute.',
@@ -306,12 +250,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('DATA MOVEMENT', Colors.blue, [
+        _buildInstructionCategory('DATA MOVEMENT', [
           const _InstructionInfo(
             mnemonic: 'LDA',
             hex: '0x1',
             usage: 'LDA addr',
-            color: Colors.blue,
             description:
                 'Load from Address - Loads value from RAM into A register.',
             behavior:
@@ -324,7 +267,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'LDI',
             hex: '0x5',
             usage: 'LDI #val',
-            color: Colors.blue,
             description:
                 'Load Immediate - Loads a literal value into A register.',
             behavior:
@@ -337,7 +279,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'STA',
             hex: '0x4',
             usage: 'STA addr',
-            color: Colors.blue,
             description: 'Store to Address - Stores A register value into RAM.',
             behavior:
                 'Writes the current value of register A to the specified memory address. '
@@ -347,12 +288,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('ARITHMETIC', Colors.teal, [
+        _buildInstructionCategory('ARITHMETIC', [
           const _InstructionInfo(
             mnemonic: 'ADD',
             hex: '0x2',
             usage: 'ADD addr',
-            color: Colors.teal,
             description: 'Add - Adds value from RAM to A register.',
             behavior:
                 'Reads value from memory address, adds it to register A, stores result in A. '
@@ -364,7 +304,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'SUB',
             hex: '0x3',
             usage: 'SUB addr',
-            color: Colors.teal,
             description: 'Subtract - Subtracts value from RAM from A register.',
             behavior:
                 'Reads value from memory address, subtracts it from register A, stores result in A. '
@@ -374,12 +313,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('JUMPS & BRANCHES', Colors.orange, [
+        _buildInstructionCategory('JUMPS & BRANCHES', [
           const _InstructionInfo(
             mnemonic: 'JMP',
             hex: '0x6',
             usage: 'JMP addr',
-            color: Colors.orange,
             description: 'Jump - Unconditionally jumps to specified address.',
             behavior:
                 'Sets the program counter to the operand address. Execution continues from that address. '
@@ -391,7 +329,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'JC',
             hex: '0x7',
             usage: 'JC addr',
-            color: Colors.orange,
             description: 'Jump if Carry - Jumps only if carry flag is set.',
             behavior:
                 'If carry flag = 1, sets program counter to operand address. '
@@ -403,7 +340,6 @@ class InstructionSetDialog extends StatelessWidget {
             mnemonic: 'JZ',
             hex: '0x8',
             usage: 'JZ addr',
-            color: Colors.orange,
             description: 'Jump if Zero - Jumps only if zero flag is set.',
             behavior:
                 'If zero flag = 1 (last ALU result was 0), sets program counter to operand address. '
@@ -413,12 +349,11 @@ class InstructionSetDialog extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('OUTPUT', Colors.purpleAccent, [
+        _buildInstructionCategory('OUTPUT', [
           const _InstructionInfo(
             mnemonic: 'OUT',
             hex: '0xE',
             usage: 'OUT',
-            color: Colors.purpleAccent,
             description: 'Output - Displays value from A register.',
             behavior:
                 'Sends the current value of register A to the output display. '
@@ -432,27 +367,17 @@ class InstructionSetDialog extends StatelessWidget {
 
   Widget _buildInstructionCategory(
     String name,
-    Color color,
     List<_InstructionInfo> instructions,
   ) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          name,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...instructions.map(
-          (info) => Padding(
+        GlassSectionTitle(name),
+        for (final info in instructions)
+          Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _InstructionCard(info: info),
           ),
-        ),
       ],
     );
   }
@@ -462,7 +387,6 @@ class _InstructionInfo {
   final String mnemonic;
   final String hex;
   final String usage;
-  final Color color;
   final String description;
   final String behavior;
   final String operandType;
@@ -472,12 +396,57 @@ class _InstructionInfo {
     required this.mnemonic,
     required this.hex,
     required this.usage,
-    required this.color,
     required this.description,
     required this.behavior,
     required this.operandType,
     this.example,
   });
+}
+
+/// Mnemonic chip in the editor's instruction colour.
+class _Mnemonic extends StatelessWidget {
+  final String text;
+
+  const _Mnemonic(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Glass.driveFill.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: Glass.mono,
+          color: Glass.synOp,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  final Widget child;
+
+  const _Card({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Glass.raised,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Glass.border),
+      ),
+      child: child,
+    );
+  }
 }
 
 class _InstructionCard extends StatelessWidget {
@@ -487,44 +456,29 @@ class _InstructionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: info.color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(4),
-        color: info.color.withValues(alpha: 0.05),
-      ),
+    return _Card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: info.color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
-                  info.mnemonic,
-                  style: TextStyle(
-                    color: info.color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              _Mnemonic(info.mnemonic),
               const SizedBox(width: 8),
               Text(
                 info.hex,
-                style: TextStyle(color: Colors.grey[500], fontSize: 10),
+                style: const TextStyle(
+                  fontFamily: Glass.mono,
+                  color: Glass.dim,
+                  fontSize: 11,
+                ),
               ),
               const Spacer(),
               Text(
                 info.usage,
-                style: TextStyle(
-                  color: info.color.withValues(alpha: 0.7),
-                  fontSize: 10,
+                style: const TextStyle(
+                  fontFamily: Glass.mono,
+                  color: Glass.synArg,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -533,57 +487,45 @@ class _InstructionCard extends StatelessWidget {
           Text(
             info.description,
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
+              color: Glass.text,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 6),
-          _buildInfoRow('Operand', info.operandType),
+          const SizedBox(height: 4),
+          Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'Operand  ',
+                  style: TextStyle(
+                    color: Glass.dim,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                TextSpan(
+                  text: info.operandType,
+                  style: const TextStyle(color: Glass.synArg),
+                ),
+              ],
+            ),
+            style: const TextStyle(fontSize: 12),
+          ),
           const SizedBox(height: 4),
           Text(
             info.behavior,
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 10,
-              height: 1.4,
+            style: const TextStyle(
+              color: Glass.muted,
+              fontSize: 12,
+              height: 1.45,
             ),
           ),
           if (info.example != null) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(
-                info.example!,
-                style: TextStyle(color: Colors.grey[300], fontSize: 10),
-              ),
-            ),
+            const SizedBox(height: 8),
+            GlassCodeBlock(info.example!),
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      children: [
-        Text(
-          '$label: ',
-          style: TextStyle(
-            color: Colors.grey[500],
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(color: Color(0xFFB5CEA8), fontSize: 10),
-        ),
-      ],
     );
   }
 }
@@ -591,87 +533,58 @@ class _InstructionCard extends StatelessWidget {
 class _OperandTypeCard extends StatelessWidget {
   final String prefix;
   final String name;
-  final Color color;
   final String example;
   final String description;
 
   const _OperandTypeCard({
     required this.prefix,
     required this.name,
-    required this.color,
     required this.example,
     required this.description,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(4),
-        color: color.withValues(alpha: 0.05),
-      ),
+    return _Card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              if (prefix.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    prefix,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Glass.ground,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Glass.borderSoft),
+                ),
+                child: Text(
+                  prefix.isEmpty ? 'no prefix' : prefix,
+                  style: TextStyle(
+                    fontFamily: Glass.mono,
+                    color: prefix.isEmpty ? Glass.dim : Glass.synArg,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontStyle: prefix.isEmpty ? FontStyle.italic : null,
                   ),
                 ),
-                const SizedBox(width: 8),
-              ] else ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    '(no prefix)',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 9,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
+              ),
+              const SizedBox(width: 8),
               Text(
                 name,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                  color: Glass.text,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const Spacer(),
               Text(
                 example,
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.7),
-                  fontSize: 10,
+                style: const TextStyle(
+                  fontFamily: Glass.mono,
+                  color: Glass.synArg,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -679,10 +592,10 @@ class _OperandTypeCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             description,
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 10,
-              height: 1.4,
+            style: const TextStyle(
+              color: Glass.muted,
+              fontSize: 12,
+              height: 1.45,
             ),
           ),
         ],
@@ -720,65 +633,42 @@ class _SyntaxSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'LABELS, CONSTANTS & DATA',
-          style: TextStyle(
-            color: Colors.amber,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
+        const GlassSectionTitle('Labels, constants & data'),
         for (final (syntax, meaning) in _rules)
           Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 170,
+                  width: 180,
                   child: Text(
                     syntax,
                     style: const TextStyle(
-                      color: Color(0xFF4EC9B0),
-                      fontSize: 11,
+                      fontFamily: Glass.mono,
+                      color: Glass.synLabel,
+                      fontSize: 12,
                     ),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     meaning,
-                    style: TextStyle(color: Colors.grey[300], fontSize: 11),
+                    style: const TextStyle(color: Glass.textSoft, fontSize: 12),
                   ),
                 ),
               ],
             ),
           ),
+        const SizedBox(height: 4),
+        const GlassCodeBlock(_example),
         const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.white12),
-          ),
-          child: Text(
-            _example,
-            style: TextStyle(
-              color: Colors.grey[300],
-              fontSize: 11,
-              height: 1.4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'The gutter lists each line\'s address and assembled byte after '
-          'ASSEMBLE & LOAD. Names are not case-sensitive.',
-          style: TextStyle(color: Colors.grey[500], fontSize: 10),
+        const Text(
+          'After Assemble & load, the gutter lists each line\'s address and '
+          'first byte. Names are not case-sensitive.',
+          style: TextStyle(color: Glass.dim, fontSize: 11),
         ),
       ],
     );

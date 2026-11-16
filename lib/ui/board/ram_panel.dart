@@ -93,20 +93,13 @@ class _RamPanelState extends State<RamPanel> {
   }
 
   void _edit(int address) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Glass.panel,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Glass.radius),
-          side: const BorderSide(color: Glass.border),
-        ),
-        child: RamEditDialog(
-          address: address,
-          currentValue: cpu.ram[address],
-          mode: cpu.mode,
-          onValueChanged: (value) => widget.onEdit(address, value),
-        ),
+    showGlassDialog<void>(
+      context,
+      child: RamEditDialog(
+        address: address,
+        currentValue: cpu.ram[address],
+        mode: cpu.mode,
+        onValueChanged: (value) => widget.onEdit(address, value),
       ),
     );
   }
@@ -208,6 +201,7 @@ class _RamPanelState extends State<RamPanel> {
                         ? (role == BusRole.idle ? null : role)
                         : null,
                     isMar: isMar,
+                    isPc: a == pc,
                     onTap: () => _edit(a),
                   );
                 },
@@ -230,6 +224,9 @@ class _RamRow extends StatelessWidget {
   final String markers;
   final BusRole? highlight;
   final bool isMar;
+
+  /// The program counter points here: an amber tag on the left edge.
+  final bool isPc;
   final VoidCallback onTap;
 
   const _RamRow({
@@ -242,6 +239,7 @@ class _RamRow extends StatelessWidget {
     required this.markers,
     required this.highlight,
     required this.isMar,
+    required this.isPc,
     required this.onTap,
   });
 
@@ -256,72 +254,92 @@ class _RamRow extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'RAM $address = $hex, $view',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: fill,
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(4),
-            border: outline == null ? null : Border.all(color: outline),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 38,
-                child: Text(
-                  address,
-                  style: Glass.code.copyWith(color: Glass.dim),
-                ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(4),
+                border: outline == null ? null : Border.all(color: outline),
               ),
-              SizedBox(
-                width: 34,
-                child: Text(
-                  hex,
-                  style: Glass.code.copyWith(
-                    color: Glass.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  view.trimLeft(),
-                  overflow: TextOverflow.ellipsis,
-                  style: Glass.code.copyWith(
-                    color: isData
-                        ? Glass.synData
-                        : isOperand
-                        ? Glass.faint
-                        : Glass.synOp,
-                  ),
-                ),
-              ),
-              if (symbol.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Text(
-                    symbol,
-                    style: const TextStyle(fontSize: 11, color: Glass.synLabel),
-                  ),
-                ),
-              if (markers.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: Text(
-                    markers,
-                    style: const TextStyle(
-                      fontFamily: Glass.mono,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Glass.bus,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 38,
+                    child: Text(
+                      address,
+                      style: Glass.code.copyWith(color: Glass.dim),
                     ),
                   ),
-                ),
-            ],
+                  SizedBox(
+                    width: 34,
+                    child: Text(
+                      hex,
+                      style: Glass.code.copyWith(
+                        color: Glass.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      view.trimLeft(),
+                      overflow: TextOverflow.ellipsis,
+                      style: Glass.code.copyWith(
+                        color: isData
+                            ? Glass.synData
+                            : isOperand
+                            ? Glass.faint
+                            : Glass.synOp,
+                      ),
+                    ),
+                  ),
+                  if (symbol.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(
+                        symbol,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Glass.synLabel,
+                        ),
+                      ),
+                    ),
+                  if (markers.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Text(
+                        markers,
+                        style: const TextStyle(
+                          fontFamily: Glass.mono,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Glass.bus,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
+          if (isPc)
+            Positioned(
+              left: 0,
+              top: 3,
+              bottom: 3,
+              child: Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: Glass.bus,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

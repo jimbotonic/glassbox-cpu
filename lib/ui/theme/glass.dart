@@ -74,6 +74,21 @@ class Glass {
 
   static const TextStyle note = TextStyle(color: muted, fontSize: 12);
 
+  static const TextStyle dialogTitle = TextStyle(
+    color: text,
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.8,
+  );
+
+  /// Heading of a group inside a panel or dialog.
+  static const TextStyle sectionTitle = TextStyle(
+    color: textSoft,
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.8,
+  );
+
   static const TextStyle value = TextStyle(
     fontFamily: mono,
     color: text,

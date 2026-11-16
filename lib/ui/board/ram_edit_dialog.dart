@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/assembler.dart';
 import '../../core/cpu_mode.dart';
 import '../theme/glass.dart';
+import 'glass_widgets.dart';
 
 /// Edits one RAM byte: an instruction, a hex value or a decimal value.
 class RamEditDialog extends StatefulWidget {
@@ -102,75 +103,50 @@ class RamEditDialogState extends State<RamEditDialog> {
     Navigator.of(context).pop();
   }
 
+  OutlineInputBorder _border(Color color, [double width = 1]) =>
+      OutlineInputBorder(
+        borderSide: BorderSide(color: color, width: width),
+        borderRadius: BorderRadius.circular(8),
+      );
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 400,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final address = widget.mode.hexAddress(widget.address);
+    final current = widget.currentValue;
+    return GlassDialogFrame(
+      title: 'EDIT RAM[$address]',
+      note:
+          'Now ${Glass.hex2(current)} · $current. Type an instruction, a hex '
+          'value or a decimal value.',
+      width: 420,
+      scrollable: false,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'EDIT RAM AT ADDRESS ${widget.mode.hexAddress(widget.address)}',
-                style: const TextStyle(
-                  color: Glass.read,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.grey),
-                onPressed: () => Navigator.pop(context),
-                iconSize: 20,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Enter instruction, hex, or decimal value',
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Examples: LDI #5, 0xFF, 240',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 10,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 16),
           TextField(
             controller: _controller,
             autofocus: true,
+            style: const TextStyle(
+              fontFamily: Glass.mono,
+              fontSize: 14,
+              color: Glass.text,
+            ),
+            cursorColor: Glass.bus,
             decoration: InputDecoration(
-              labelText: 'Instruction / Hex / Decimal',
-              labelStyle: TextStyle(color: Colors.grey[400]),
+              labelText: 'Instruction / hex / decimal',
+              labelStyle: const TextStyle(color: Glass.muted, fontSize: 13),
+              floatingLabelStyle: const TextStyle(color: Glass.driveText),
+              hintText: 'LDI #5   0xFF   240',
+              hintStyle: const TextStyle(color: Glass.faint),
+              filled: true,
+              fillColor: Glass.ground,
               errorText: _errorMessage,
-              errorStyle: const TextStyle(color: Colors.redAccent),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey[700]!),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(
-                  color: _errorMessage != null ? Colors.redAccent : Glass.read,
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.redAccent),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-                borderRadius: BorderRadius.circular(4),
-              ),
+              errorMaxLines: 2,
+              errorStyle: const TextStyle(color: Glass.led, fontSize: 12),
+              enabledBorder: _border(Glass.border),
+              focusedBorder: _border(Glass.drive, 2),
+              errorBorder: _border(Glass.led),
+              focusedErrorBorder: _border(Glass.led, 2),
             ),
             onSubmitted: (_) => _submitValue(),
             onChanged: (_) {
@@ -181,33 +157,20 @@ class RamEditDialogState extends State<RamEditDialog> {
               }
             },
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.grey[400]),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _submitValue,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Glass.read,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
+          if (widget.mode == CpuMode.extended) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'An instruction with an operand stores only its opcode byte; '
+              'edit the next address for the operand.',
+              style: TextStyle(color: Glass.dim, fontSize: 11),
+            ),
+          ],
         ],
       ),
+      actions: [
+        GlassButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
+        GlassButton(label: 'Save', primary: true, onPressed: _submitValue),
+      ],
     );
   }
 }

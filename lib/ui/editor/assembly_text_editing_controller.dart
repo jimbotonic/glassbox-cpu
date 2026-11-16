@@ -1,18 +1,22 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/assembler.dart';
 import '../../core/opcode.dart';
-import '../../core/operand.dart';
+import '../theme/glass.dart';
 
 class AssemblyTextEditingController extends TextEditingController {
   AssemblyTextEditingController({super.text});
 
-  static const Color highlightColor = Color(0x55FFC107); // translucent amber
-  static const Color labelColor = Color(0xFFFFD866);
-  static const Color directiveColor = Color(0xFF4EC9B0);
-  static const Color symbolColor = Color(0xFF9CDCFE);
-  static const Color stringColor = Color(0xFFCE9178);
+  /// Background of the executing line: a wash of the bus colour, which
+  /// also marks the current source line in the narration strip.
+  static final Color highlightColor = Glass.bus.withValues(alpha: 0.18);
+  static const Color labelColor = Glass.synLabel;
+  static const Color mnemonicColor = Glass.synOp;
+  static const Color operandColor = Glass.synArg;
+
+  /// Strings and characters: data bytes, coloured as in the RAM panel.
+  static const Color stringColor = Glass.synData;
+  static const Color commentColor = Glass.synComment;
 
   /// 0-based line drawn with a highlight background (the instruction being
   /// executed), or null. Read in [buildTextSpan], so the owning widget must
@@ -72,7 +76,7 @@ class AssemblyTextEditingController extends TextEditingController {
         // Child spans inherit the background from this parent span.
         spans.add(
           TextSpan(
-            style: const TextStyle(backgroundColor: highlightColor),
+            style: TextStyle(backgroundColor: highlightColor),
             children: lineSpans,
           ),
         );
@@ -114,12 +118,15 @@ class AssemblyTextEditingController extends TextEditingController {
         } else if (!seenKeyword) {
           seenKeyword = true;
           bold = true;
-          color = first == '.' ? directiveColor : _instructionColor(token);
+          // Unknown words stay plain, so a typo stands out.
+          color = first == '.' || Opcode.isMnemonic(token)
+              ? mnemonicColor
+              : null;
         } else {
-          color = symbolColor;
+          color = operandColor;
         }
       } else if (first == '#' || first == '-' || _isDigit(first)) {
-        color = _operandColor(token);
+        color = operandColor;
       }
       seenToken = true;
 
@@ -139,7 +146,7 @@ class AssemblyTextEditingController extends TextEditingController {
         TextSpan(
           text: line.substring(comment),
           style: style?.copyWith(
-            color: Colors.grey.shade500,
+            color: commentColor,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -149,23 +156,4 @@ class AssemblyTextEditingController extends TextEditingController {
   }
 
   static bool _isDigit(String c) => '0123456789'.contains(c);
-
-  Color? _instructionColor(String word) {
-    final opcode = Opcode.values.firstWhereOrNull(
-      (opcode) => opcode.mnemonic == word.toUpperCase(),
-    );
-    if (opcode == null) return null;
-    return opcode.highlightColor.color.withValues(
-      alpha: opcode.highlightColor.alpha,
-    );
-  }
-
-  Color _operandColor(String operand) {
-    final highlight =
-        OperandPrefix.values
-            .firstWhereOrNull((e) => operand.startsWith(e.prefix))
-            ?.highlightColor ??
-        OperandHighlightColor.decimal;
-    return highlight.color.withValues(alpha: highlight.alpha);
-  }
 }

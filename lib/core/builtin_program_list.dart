@@ -1,17 +1,14 @@
-import 'package:flutter/material.dart';
-
 import 'cpu_mode.dart';
 
 enum BuiltinProgramCategory {
-  beginner('Beginner', Colors.green),
-  arithmetic('Arithmetic', Colors.blue),
-  controlFlow('Control Flow', Colors.orange),
-  patterns('Patterns', Colors.purple),
-  extended('Extended CPU', Colors.cyan);
+  beginner('Beginner'),
+  arithmetic('Arithmetic'),
+  controlFlow('Control Flow'),
+  patterns('Patterns'),
+  extended('Extended CPU');
 
   final String name;
-  final Color color;
-  const BuiltinProgramCategory(this.name, this.color);
+  const BuiltinProgramCategory(this.name);
 }
 
 class BuiltinProgram {

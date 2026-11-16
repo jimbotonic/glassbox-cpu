@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/assembler.dart';
@@ -66,16 +67,22 @@ class _ProgramEditorState extends State<ProgramEditor> {
     fontSize: 13,
     color: Glass.text,
     height: 1.57,
+    // TextField merges in the theme's body style, whose letter spacing
+    // would widen lines past the measured width and wrap them.
+    letterSpacing: 0,
   );
 
-  /// Width the code needs without wrapping: its longest line, measured.
-  double get _codeWidth {
-    final longest = _editorController.text
-        .split('\n')
-        .fold('', (a, line) => line.length > a.length ? line : a);
+  /// Width the code needs without wrapping: its widest line, measured as
+  /// drawn (bold mnemonics, italic comments), plus the field's padding.
+  double _codeWidth(BuildContext context) {
     final painter = TextPainter(
-      text: TextSpan(text: longest, style: _codeStyle),
+      text: _editorController.buildTextSpan(
+        context: context,
+        style: _codeStyle,
+        withComposing: false,
+      ),
       textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     final width = painter.width;
     painter.dispose();
@@ -191,7 +198,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
                     style: TextStyle(
                       color: listing.isData
                           ? AssemblyTextEditingController.stringColor
-                          : Glass.synData,
+                          : Glass.synComment,
                     ),
                   ),
                 ],
@@ -251,7 +258,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
           '${widget.mode.label} CPU: ${widget.mode.description}. '
           'RAM cleared: assemble again.';
       _setLogTypeNormal();
-      _reportBreakpoints();
+      // The board is mid-build here: tell it about breakpoints afterwards.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reportBreakpoints();
+      });
       _reportCursor();
     }
   }
@@ -333,45 +343,37 @@ class _ProgramEditorState extends State<ProgramEditor> {
   }
 
   void _openProgramBrowserDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Glass.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: BuiltinProgramBrowserDialog(
-          programs: _programs,
-          categories: _categories,
-          currentMode: widget.mode,
-          onProgramSelected: (program) {
-            if (program.mode != widget.mode) {
-              widget.onModeChanged?.call(program.mode);
-            }
-            setState(() {
-              isAssembled = false;
-              _errorLine = null;
-              _breakpointLines.clear();
-            });
-            _editorController.text = program.code;
-            _updateLineCount();
-            _reportBreakpoints();
-            _errorMessageController.text =
-                'Opened for the ${program.mode.label} CPU. '
-                'Assemble & load to put it in RAM.';
-            _setLogTypeNormal();
-          },
-        ),
+    showGlassDialog<void>(
+      context,
+      child: BuiltinProgramBrowserDialog(
+        programs: _programs,
+        categories: _categories,
+        currentMode: widget.mode,
+        onProgramSelected: (program) {
+          if (program.mode != widget.mode) {
+            widget.onModeChanged?.call(program.mode);
+          }
+          setState(() {
+            isAssembled = false;
+            _errorLine = null;
+            _breakpointLines.clear();
+          });
+          _editorController.text = program.code;
+          _updateLineCount();
+          _reportBreakpoints();
+          _errorMessageController.text =
+              'Opened for the ${program.mode.label} CPU. '
+              'Assemble & load to put it in RAM.';
+          _setLogTypeNormal();
+        },
       ),
     );
   }
 
   void _openInstructionSetDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Glass.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: InstructionSetDialog(mode: widget.mode),
-      ),
+    showGlassDialog<void>(
+      context,
+      child: InstructionSetDialog(mode: widget.mode),
     );
   }
 
@@ -553,7 +555,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
                           controller: _horizontalScrollController,
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
-                            width: math.max(constraints.maxWidth, _codeWidth),
+                            width: math.max(
+                              constraints.maxWidth,
+                              _codeWidth(context),
+                            ),
                             child: _codeField(hintText),
                           ),
                         ),
@@ -578,7 +583,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
               Expanded(
                 child: GlassButton(
                   label: 'Built-in programs',
-                  icon: Icons.folder_open,
+                  icon: FluentIcons.folder_open_24_regular,
                   onPressed: _openProgramBrowserDialog,
                 ),
               ),
@@ -586,7 +591,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
               Expanded(
                 child: GlassButton(
                   label: 'Instruction set',
-                  icon: Icons.menu_book_outlined,
+                  icon: FluentIcons.book_24_regular,
                   onPressed: _openInstructionSetDialog,
                 ),
               ),
