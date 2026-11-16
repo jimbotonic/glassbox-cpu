@@ -11,6 +11,7 @@ import '../theme/glass.dart';
 import 'assembly_text_editing_controller.dart';
 import 'builtin_program_browser_dialog.dart';
 import 'instruction_set_dialog.dart';
+import 'line_comment.dart';
 
 class ProgramEditor extends StatefulWidget {
   /// Called after each assembly with its result, or null on an error.
@@ -113,6 +114,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
   final Set<int> _breakpointLines = {};
   int? _reportedCursorAddress;
 
+  /// Line whose comment the hint box shows: the cursor's line after an
+  /// edit or click, the executing line after a step.
+  int? _focusLine;
+
   /// Instruction address for [line] in the current assembly, or null.
   int? _addressForLine(int line) =>
       isAssembled ? _assembly?.addressForLine(line) : null;
@@ -130,6 +135,11 @@ class _ProgramEditorState extends State<ProgramEditor> {
     if (offset >= 0 && offset <= text.length) {
       final line = '\n'.allMatches(text.substring(0, offset)).length;
       address = _addressForLine(line);
+      if (line != _focusLine) {
+        Future.microtask(() {
+          if (mounted) setState(() => _focusLine = line);
+        });
+      }
     }
     if (address != _reportedCursorAddress) {
       _reportedCursorAddress = address;
@@ -247,6 +257,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
   @override
   void didUpdateWidget(ProgramEditor old) {
     super.didUpdateWidget(old);
+    if (old.currentAddress != widget.currentAddress) {
+      final line = _highlightedLine;
+      if (line != null) _focusLine = line;
+    }
     if (old.mode != widget.mode) {
       // The CPU was switched and its RAM cleared: the old assembly is gone.
       setState(() {
@@ -609,21 +623,28 @@ class _ProgramEditorState extends State<ProgramEditor> {
               ),
               child: ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _errorMessageController,
-                builder: (context, value, _) => Text(
-                  value.text,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: Glass.mono,
-                    fontSize: 11.5,
-                    height: 1.6,
-                    color: _isLogTypeError
-                        ? Glass.led
-                        : _isLogTypeInfo
-                        ? Glass.okText
-                        : Glass.muted,
-                  ),
-                ),
+                builder: (context, value, _) {
+                  final focus = _focusLine;
+                  final comment = _isLogTypeError || focus == null
+                      ? null
+                      : commentForLine(_editorController.text, focus);
+                  if (comment != null) return _commentHint(focus!, comment);
+                  return Text(
+                    value.text,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: Glass.mono,
+                      fontSize: 11.5,
+                      height: 1.6,
+                      color: _isLogTypeError
+                          ? Glass.led
+                          : _isLogTypeInfo
+                          ? Glass.okText
+                          : Glass.muted,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -631,4 +652,29 @@ class _ProgramEditorState extends State<ProgramEditor> {
       ),
     );
   }
+
+  /// The focus line's comment in full, so a long one needs no scrolling.
+  Widget _commentHint(int line, String comment) => Text.rich(
+    TextSpan(
+      children: [
+        TextSpan(
+          text: 'line ${line + 1}  ',
+          style: const TextStyle(
+            color: Glass.faint,
+            fontStyle: FontStyle.normal,
+          ),
+        ),
+        TextSpan(text: comment),
+      ],
+    ),
+    maxLines: 4,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(
+      fontFamily: Glass.mono,
+      fontSize: 11.5,
+      height: 1.6,
+      fontStyle: FontStyle.italic,
+      color: AssemblyTextEditingController.commentColor,
+    ),
+  );
 }
