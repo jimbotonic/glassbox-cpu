@@ -31,6 +31,14 @@ class Datapath extends StatelessWidget {
 
   static const double _gap = 8;
 
+  /// Width of the stub from a card to the bus line, and of the bus line.
+  static const double _stub = 28;
+  static const double _spine = 4;
+
+  /// How far the display wire drops below the output register before it
+  /// turns toward the display.
+  static const double _wireDrop = 14;
+
   bool _on(ControlWord s) => s.isActive(cpu.controlWord);
 
   BusRole _role(ControlWord? drive, ControlWord? read, [ControlWord? count]) {
@@ -190,56 +198,78 @@ class Datapath extends StatelessWidget {
           _Flags(cpu: cpu, latched: fiActive),
         ],
       ),
+      if (extended) _portModule(),
+      // Last on the right: its wire to the display leaves from below.
       _Module(
         name: 'OUTPUT REGISTER',
         value: cpu.outputRegister,
         role: _role(null, ControlWord.oi),
         idle: 'port 0',
-        note: '${_decoded(cpu.outputRegister)} · drives the display ↓',
+        note: '${_decoded(cpu.outputRegister)} · drives the display',
       ),
-      if (extended) _portModule(),
     ];
+    final outActive = _on(ControlWord.oi);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _BusHeader(info: info),
         const SizedBox(height: 10),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _column(left)),
-              Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  color: Glass.bus.withValues(
-                    alpha: info.source == null ? 0.3 : 0.6,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Expanded(child: _column(right)),
-            ],
-          ),
-        ),
-        // Wire from the output register down to the display.
+        // The display sits under the left column, beside the last cards on
+        // the right; the bus line ends at the output register, and the red
+        // wire runs from that register's foot, under the bus, to the display.
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Spacer(),
-            const SizedBox(width: 4 + 28),
             Expanded(
-              child: Center(
-                child: Container(
-                  width: 3,
-                  height: 22,
-                  color: Glass.led.withValues(alpha: 0.7),
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _column(left),
+                  const SizedBox(height: _gap),
+                  Padding(
+                    padding: const EdgeInsets.only(right: _stub),
+                    child: _Display(
+                      cpu: cpu,
+                      outputs: outputs,
+                      active: outActive,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          width: _spine,
+                          decoration: BoxDecoration(
+                            color: Glass.bus.withValues(
+                              alpha: info.source == null ? 0.3 : 0.6,
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Expanded(child: _column(right)),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    height: _wireDrop + 6,
+                    child: CustomPaint(
+                      painter: _DisplayWire(active: outActive),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-        _Display(cpu: cpu, outputs: outputs, active: _on(ControlWord.oi)),
       ],
     );
   }
@@ -280,6 +310,49 @@ class Datapath extends StatelessWidget {
       ],
     ],
   );
+}
+
+/// The output register's wire to the display: down from the middle of the
+/// register's foot, then left under the end of the bus line, ending in an
+/// arrow at the display's right edge. Drawn from the top of the area just
+/// below the register; the horizontal run reaches past the area's left edge
+/// (painting is not clipped) across the stub gap to the display.
+class _DisplayWire extends CustomPainter {
+  final bool active;
+
+  const _DisplayWire({required this.active});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stub = Datapath._stub;
+    const spine = Datapath._spine;
+    final x0 = spine + stub + (size.width - spine - stub) / 2;
+    const y = Datapath._wireDrop;
+    const left = -stub + 6; // stop short of the display, for the arrow
+    final paint = Paint()
+      ..color = Glass.led.withValues(alpha: active ? 1 : 0.7)
+      ..strokeWidth = active ? 3 : 2
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(x0, 0)
+        ..lineTo(x0, y)
+        ..lineTo(left, y),
+      paint,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(-stub, y)
+        ..lineTo(left, y - 4)
+        ..lineTo(left, y + 4)
+        ..close(),
+      Paint()..color = paint.color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DisplayWire old) => old.active != active;
 }
 
 /// `BUS 0x45 · 69 · 'E'   RAM drives · A reads`
@@ -553,30 +626,32 @@ class _Display extends StatelessWidget {
     required this.active,
   });
 
-  static const int _shown = 24;
+  static const _pink = Color(0xFFFFB3B3);
+  static const _rose = Color(0xFFC9A3A3);
 
   @override
   Widget build(BuildContext context) {
     final value = cpu.outputRegister;
     final char = Glass.char(value);
-    final shown = outputs.length > _shown
-        ? outputs.sublist(outputs.length - _shown)
-        : outputs;
     final printable =
         outputs.isNotEmpty && outputs.every((v) => Glass.char(v) != null);
+    final count = outputs.isEmpty
+        ? 'nothing yet'
+        : '${outputs.length} value${outputs.length == 1 ? '' : 's'}'
+              '${printable ? ' · text' : ''}';
 
     return Semantics(
       label: 'Display: $value',
       liveRegion: true,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(
           gradient: const RadialGradient(
             center: Alignment.topCenter,
             radius: 1.6,
             colors: [Color(0xFF1E1112), Color(0xFF120B0C)],
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(Glass.radius),
           border: Border.all(
             color: active ? Glass.read : const Color(0xFF6A2B2B),
           ),
@@ -587,130 +662,136 @@ class _Display extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
                 const Text(
                   'DISPLAY',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1,
-                    color: Color(0xFFFFB3B3),
+                    color: _pink,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(width: 8),
                 const Text(
-                  'what the program shows',
-                  style: TextStyle(fontSize: 12, color: Color(0xFFC9A3A3)),
+                  'port 0',
+                  style: TextStyle(fontSize: 11, color: _rose),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0A0606),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF3A1A1A)),
-                      ),
-                      child: Text(
-                        value.toString().padLeft(3, '0'),
-                        style: TextStyle(
-                          fontFamily: Glass.mono,
-                          fontSize: 48,
-                          height: 1.1,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 4,
-                          color: Glass.led,
-                          shadows: [
-                            Shadow(
-                              color: Glass.led.withValues(alpha: 0.55),
-                              blurRadius: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          char ?? '—',
-                          style: const TextStyle(
-                            fontFamily: Glass.mono,
-                            fontSize: 24,
-                            color: Color(0xFFFFD9D9),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${Glass.hex2(value)} · '
-                          '${value.toRadixString(2).padLeft(8, '0')}',
-                          style: const TextStyle(
-                            fontFamily: Glass.mono,
-                            fontSize: 12,
-                            color: Color(0xFFC9A3A3),
-                          ),
+                const Spacer(),
+                Text(count, style: const TextStyle(fontSize: 11, color: _rose)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A0606),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF3A1A1A)),
+                  ),
+                  child: Text(
+                    value.toString().padLeft(3, '0'),
+                    style: TextStyle(
+                      fontFamily: Glass.mono,
+                      fontSize: 40,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 3,
+                      color: Glass.led,
+                      shadows: [
+                        Shadow(
+                          color: Glass.led.withValues(alpha: 0.55),
+                          blurRadius: 14,
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        char ?? '—',
+                        style: const TextStyle(
+                          fontFamily: Glass.mono,
+                          fontSize: 18,
+                          height: 1.2,
+                          color: Color(0xFFFFD9D9),
+                        ),
+                      ),
+                      Text(
+                        Glass.hex2(value),
+                        style: const TextStyle(
+                          fontFamily: Glass.mono,
+                          fontSize: 12,
+                          color: _rose,
+                        ),
+                      ),
+                      Text(
+                        value.toRadixString(2).padLeft(8, '0'),
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: const TextStyle(
+                          fontFamily: Glass.mono,
+                          fontSize: 12,
+                          color: _rose,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(width: 28),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'OUTPUT SO FAR',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.7,
-                      color: Color(0xFFC9A3A3),
+            const SizedBox(height: 10),
+            // Past outputs: as many of the latest as fit on one row.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final chipWidth = printable ? 26.0 : 38.0;
+                const spacing = 5.0;
+                final fit =
+                    ((constraints.maxWidth + spacing) / (chipWidth + spacing))
+                        .floor()
+                        .clamp(1, 64);
+                final truncated = outputs.length > fit;
+                final shown = truncated
+                    ? outputs.sublist(outputs.length - (fit - 1))
+                    : outputs;
+                final chips = <Widget>[
+                  if (truncated)
+                    _OutputChip(text: '…', faded: true, width: chipWidth),
+                  for (int i = 0; i < shown.length; i++)
+                    _OutputChip(
+                      text: printable
+                          ? String.fromCharCode(shown[i])
+                          : '${shown[i]}',
+                      latest: i == shown.length - 1,
+                      width: chipWidth,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      if (outputs.length > _shown)
-                        const _OutputChip(text: '…', faded: true),
-                      for (int i = 0; i < shown.length; i++)
-                        _OutputChip(
-                          text: printable
-                              ? String.fromCharCode(shown[i])
-                              : '${shown[i]}',
-                          latest: i == shown.length - 1,
-                        ),
-                      if (outputs.isEmpty)
-                        for (int i = 0; i < 4; i++)
-                          const _OutputChip(text: '·', faded: true),
+                  if (outputs.isEmpty)
+                    for (int i = 0; i < fit.clamp(1, 4); i++)
+                      _OutputChip(text: '·', faded: true, width: chipWidth),
+                ];
+                return Row(
+                  children: [
+                    for (int i = 0; i < chips.length; i++) ...[
+                      if (i > 0) const SizedBox(width: spacing),
+                      chips[i],
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    outputs.isEmpty
-                        ? 'nothing output yet · OUT copies A here'
-                        : '${outputs.length} value${outputs.length == 1 ? '' : 's'}'
-                              '${printable ? ' · as text' : ' · as numbers'}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFFC9A3A3),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -723,19 +804,20 @@ class _OutputChip extends StatelessWidget {
   final String text;
   final bool latest;
   final bool faded;
+  final double width;
 
   const _OutputChip({
     required this.text,
     this.latest = false,
     this.faded = false,
+    required this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 34),
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      width: width,
+      height: 30,
       decoration: BoxDecoration(
         color: faded
             ? const Color(0xFF170D0D)
@@ -752,12 +834,12 @@ class _OutputChip extends StatelessWidget {
         ),
       ),
       child: Center(
-        widthFactor: 1,
         child: Text(
           text,
+          maxLines: 1,
           style: TextStyle(
             fontFamily: Glass.mono,
-            fontSize: 17,
+            fontSize: 14,
             color: faded
                 ? const Color(0xFF5E3A3A)
                 : latest
