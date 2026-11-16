@@ -194,9 +194,10 @@ class Datapath extends StatelessWidget {
         name: 'OUTPUT REGISTER',
         value: cpu.outputRegister,
         role: _role(null, ControlWord.oi),
-        idle: 'OI',
+        idle: 'port 0',
         note: '${_decoded(cpu.outputRegister)} · drives the display ↓',
       ),
+      if (extended) _portModule(),
     ];
 
     return Column(
@@ -240,6 +241,33 @@ class Datapath extends StatelessWidget {
         ),
         _Display(cpu: cpu, outputs: outputs, active: _on(ControlWord.oi)),
       ],
+    );
+  }
+
+  /// The port register, and the device it selects: blue when the device
+  /// drives the bus (IN), orange when the register or the device reads it.
+  Widget _portModule() {
+    final port = cpu.portRegister;
+    final stepped = info.step != null;
+    final devIn = stepped && _on(ControlWord.di);
+    final devOut = stepped && _on(ControlWord.dout);
+    final role = devOut
+        ? BusRole.drive
+        : (stepped && _on(ControlWord.pi)) || devIn
+        ? BusRole.read
+        : BusRole.idle;
+    final name = cpu.io.portName(port);
+    final note = devIn
+        ? '$name ← ${Glass.hex2(cpu.bus)}'
+        : devOut
+        ? '$name → bus: ${Glass.hex2(cpu.bus)}'
+        : 'port $port · $name';
+    return _Module(
+      name: 'I/O PORT',
+      value: port,
+      role: role,
+      idle: 'PI · DI · DO',
+      note: note,
     );
   }
 

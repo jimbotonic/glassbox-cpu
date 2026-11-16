@@ -17,6 +17,7 @@ class Disassembler {
       OperandKind.indexedB => opcode.usage,
       _ when value == null => opcode.usage,
       OperandKind.immediate => '${opcode.mnemonic} #$value',
+      OperandKind.port => '${opcode.mnemonic} $value',
       OperandKind.address => '${opcode.mnemonic} ${mode.hexAddress(value)}',
     };
   }

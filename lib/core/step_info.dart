@@ -13,7 +13,9 @@ enum BusNode {
   alu('ALU'),
   memoryAddress('MAR'),
   output('OUT'),
-  stackPointer('SP');
+  stackPointer('SP'),
+  portRegister('PORT'),
+  device('I/O');
 
   final String label;
   const BusNode(this.label);
@@ -118,6 +120,9 @@ class StepInfo {
     } else if (on(ControlWord.so)) {
       source = BusNode.alu;
       sourceLabel = aluLabel(word);
+    } else if (on(ControlWord.dout)) {
+      source = BusNode.device;
+      sourceLabel = portLabel(cpu, cpu.portRegister);
     }
 
     final destinations = <BusNode>[];
@@ -136,6 +141,8 @@ class StepInfo {
     reads(ControlWord.bi, BusNode.registerB, 'B');
     reads(ControlWord.oi, BusNode.output, 'OUT');
     reads(ControlWord.j, BusNode.programCounter, 'PC');
+    reads(ControlWord.pi, BusNode.portRegister, 'PORT');
+    reads(ControlWord.di, BusNode.device, portLabel(cpu, cpu.portRegister));
 
     final transfer = sourceLabel == null
         ? ''
@@ -166,6 +173,10 @@ class StepInfo {
     );
   }
 
+  /// `port 2 (LCD data)`: a port and what it is for.
+  static String portLabel(Cpu cpu, int port) =>
+      'port $port (${cpu.io.portName(port)})';
+
   /// The ALU operation selected by [word], e.g. `A + B` or `A << 1`.
   static String aluLabel(int word) {
     bool on(ControlWord signal) => signal.isActive(word);
@@ -187,6 +198,7 @@ class StepInfo {
       OperandKind.none => opcode.mnemonic,
       OperandKind.indexedB => opcode.usage,
       OperandKind.immediate => '${opcode.mnemonic} #$operand',
+      OperandKind.port => '${opcode.mnemonic} $operand',
       OperandKind.address =>
         '${opcode.mnemonic} ${cpu.mode.hexAddress(operand!)}',
     };

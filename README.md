@@ -126,8 +126,25 @@ The Extended CPU keeps the same bus and fetch cycle, widened to 256 bytes of RAM
 | **CALL**          | 0x22        | `CALL addr` | Push PC (its operand's address) and jump                 |
 | **RET**           | 0x23        | `RET`       | Pop PC and step past the CALL's operand                  |
 | **LDA [B]**       | 0x30        | `LDA [B]`   | Load from the address held in B (arrays, strings)        |
+| **OUT port**      | 0x18        | `OUT 2`     | Write A to the device on a port                          |
+| **IN port**       | 0x19        | `IN 5`      | Read the device on a port into A (sets no flags)         |
 
-The ALU always works on A and B, so ALU instructions overwrite B. The Extended control word adds nine signals: BO, SPO, SP+, SP−, and the ALU selects AN, OR, XR, SL, SR. The *Extended CPU* built-in programs show each feature.
+The ALU always works on A and B, so ALU instructions overwrite B. The Extended control word adds twelve signals: BO, SPO, SP+, SP−, the ALU selects AN, OR, XR, SL, SR, and the I/O signals PI, DI, DO. The *Extended CPU* built-in programs show each feature.
+
+#### I/O ports
+
+`OUT port` latches its operand into the port register (`RO|PI|CE`), then A drives the bus and the device on that port reads it (`AO|DI`). `IN port` has the device drive the bus into A (`DO|AI`). Plain `OUT` is port 0, so Classic programs behave as before. The devices are drawn under the datapath in Extended mode, and step-back undoes their changes too.
+
+| Port | Device                     | Direction | Use                                                                    |
+| ---- | -------------------------- | --------- | ---------------------------------------------------------------------- |
+| 0    | Display (output register)  | out       | Plain `OUT` or `OUT 0`                                                 |
+| 1    | Text LCD 16×2: command     | out       | HD44780 instructions: `0x38` 2 lines, `0x0C` display on, `0x01` clear, `0x80+addr` cursor (line 2 at `0x40`), `0x40+addr` custom characters. `IN 1` reads the cursor address |
+| 2    | Text LCD 16×2: data        | out       | A character at the cursor, which then moves on                         |
+| 3    | LED matrix 8×8: row        | out       | Selects the row (0–7) for the next data byte                           |
+| 4    | LED matrix 8×8: data       | out       | The row's LEDs, bit 7 on the left; the next row is selected after it   |
+| 5    | Keypad 4×4                 | in        | ASCII of the last key pressed (`0`–`9`, `A`–`D`, `*`, `#`), read once; 0 if none |
+
+Like the real HD44780, the LCD starts with its display off: send `0x38` and `0x0C` first. An unconnected port reads 0. The *I/O devices* built-in programs drive each device. In code, every port write also reaches `cpu.io` listeners, the hook for mirroring writes to real hardware.
 
 ## Getting Started
 

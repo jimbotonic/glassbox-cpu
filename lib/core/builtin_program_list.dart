@@ -5,7 +5,8 @@ enum BuiltinProgramCategory {
   arithmetic('Arithmetic'),
   controlFlow('Control Flow'),
   patterns('Patterns'),
-  extended('Extended CPU');
+  extended('Extended CPU'),
+  devices('I/O devices');
 
   final String name;
   const BuiltinProgramCategory(this.name);
@@ -357,12 +358,159 @@ right:  OUT
     ),
   ];
 
+  /// Programs for the devices on the I/O ports (Extended CPU): text LCD
+  /// on ports 1-2, LED matrix on 3-4, keypad on 5.
+  static const List<BuiltinProgram> devicePrograms = [
+    BuiltinProgram(
+      name: 'LCD: Hello, world',
+      description:
+          'Initialises the 16x2 LCD, then writes two lines from a string '
+          'with OUT 2. A newline byte moves to line 2.',
+      category: BuiltinProgramCategory.devices,
+      mode: CpuMode.extended,
+      code: '''; Text LCD: port 1 takes commands, port 2 characters
+.equ LCD_CMD 1
+.equ LCD_DATA 2
+        LDI 0x38      ; function set: 8-bit bus, 2 lines
+        OUT LCD_CMD
+        LDI 0x0C      ; display on (it starts off), no cursor
+        OUT LCD_CMD
+        LDI 0x01      ; clear, cursor to the top left
+        OUT LCD_CMD
+loop:   LDB ptr       ; B = address of the next character
+        LDA [B]
+        CMP zero      ; end of the string?
+        JZ  done
+        CMP newline   ; newline: go to line 2
+        JZ  line2
+        OUT LCD_DATA  ; show it; the cursor moves right
+next:   LDA ptr
+        ADI 1
+        STA ptr
+        JMP loop
+line2:  LDI 0xC0      ; DDRAM address 0x40: start of line 2
+        OUT LCD_CMD
+        JMP next
+done:   HLT
+
+ptr:     .db msg
+zero:    .db 0
+newline: .db 10
+msg:     .db "Hello, world!\\nGlassBox CPU", 0''',
+    ),
+    BuiltinProgram(
+      name: 'LCD: custom character',
+      description:
+          'Draws a heart in CGRAM as character 0, then prints it between '
+          'words: "I <heart> CPU".',
+      category: BuiltinProgramCategory.devices,
+      mode: CpuMode.extended,
+      code: '''; Custom LCD character: 8 rows of 5 pixels in CGRAM
+.equ LCD_CMD 1
+.equ LCD_DATA 2
+        LDI 0x38      ; 8-bit bus, 2 lines
+        OUT LCD_CMD
+        LDI 0x0C      ; display on
+        OUT LCD_CMD
+        LDI 0x01      ; clear
+        OUT LCD_CMD
+        LDI 0x40      ; CGRAM address 0: character 0, top row
+        OUT LCD_CMD
+glyph:  LDB gptr      ; write the heart, one row per byte
+        LDA [B]
+        OUT LCD_DATA
+        LDA gptr
+        ADI 1
+        STA gptr
+        LDA count
+        SBI 1
+        STA count     ; STA keeps the flags from SBI
+        JNZ glyph
+        LDI 0x80      ; back to DDRAM: line 1, column 0
+        OUT LCD_CMD
+text:   LDB tptr
+        LDA [B]
+        CMP end       ; 0xFF ends the text: 0 is the heart
+        JZ  done
+        OUT LCD_DATA
+        LDA tptr
+        ADI 1
+        STA tptr
+        JMP text
+done:   HLT
+
+gptr:   .db heart
+tptr:   .db msg
+count:  .db 8
+end:    .db 0xFF
+heart:  .db 0, 10, 31, 31, 31, 14, 4, 0
+msg:    .db "I ", 0, " CPU", 0xFF''',
+    ),
+    BuiltinProgram(
+      name: 'LED matrix: smiley',
+      description:
+          'Selects row 0, then writes eight row bytes to the 8x8 matrix; it '
+          'moves to the next row after each one.',
+      category: BuiltinProgramCategory.devices,
+      mode: CpuMode.extended,
+      code: '''; LED matrix: port 3 selects a row, port 4 lights it
+.equ ROW 3
+.equ PIXELS 4
+        LDI 0
+        OUT ROW       ; start at the top row
+loop:   LDB ptr
+        LDA [B]       ; one row: bit 7 is the left column
+        OUT PIXELS    ; the matrix then moves to the next row
+        LDA ptr
+        ADI 1
+        STA ptr
+        LDA count
+        SBI 1
+        STA count
+        JNZ loop
+        HLT
+
+ptr:    .db face
+count:  .db 8
+face:   .db 0b00111100, 0b01000010, 0b10100101, 0b10000001
+        .db 0b10100101, 0b10011001, 0b01000010, 0b00111100''',
+    ),
+    BuiltinProgram(
+      name: 'Keypad echo',
+      description:
+          'Waits for keypad presses (IN 5) and shows each key on the LCD '
+          'and the display. Runs until reset; try a faster clock.',
+      category: BuiltinProgramCategory.devices,
+      mode: CpuMode.extended,
+      code: '''; Keypad on port 5: IN gives the ASCII code of the last
+; key pressed, once, or 0 when no key is waiting.
+.equ LCD_CMD 1
+.equ LCD_DATA 2
+.equ KEYPAD 5
+        LDI 0x38      ; 8-bit bus, 2 lines
+        OUT LCD_CMD
+        LDI 0x0E      ; display on, cursor on
+        OUT LCD_CMD
+        LDI 0x01      ; clear
+        OUT LCD_CMD
+wait:   IN  KEYPAD    ; A = key, or 0
+        CMP zero      ; IN sets no flags: compare to test it
+        JZ  wait      ; nothing yet: ask again
+        OUT LCD_DATA  ; ASCII goes straight to the LCD
+        OUT           ; and to the display (port 0)
+        JMP wait
+
+zero:   .db 0''',
+    ),
+  ];
+
   static const List<BuiltinProgram> all = [
     ...beginnerPrograms,
     ...arithmeticPrograms,
     ...controlFlowPrograms,
     ...patternsPrograms,
     ...extendedPrograms,
+    ...devicePrograms,
   ];
 
   static List<BuiltinProgram> getByCategory(BuiltinProgramCategory category) {

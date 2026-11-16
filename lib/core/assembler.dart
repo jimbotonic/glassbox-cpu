@@ -243,22 +243,28 @@ class Assembler {
     caseSensitive: false,
   );
 
-  /// Instruction named on [s], chosen by mnemonic and, for `LDA`, by
-  /// whether the operand is `[B]`.
+  /// Instruction named on [s], chosen by mnemonic and, when one mnemonic
+  /// has several forms, by its operand: `LDA [B]` or `LDA addr`, `OUT` or
+  /// `OUT port`.
   Opcode _opcode(_Statement s) {
     final candidates = Opcode.values.where((op) => op.mnemonic == s.keyword);
     if (candidates.isEmpty) {
       throw AssemblerError('Unknown instruction "${s.keyword}"', line: s.line);
     }
     final indexed = _indexedB.hasMatch(s.operands);
-    final opcode = candidates.firstWhere(
+    final hasOperand = s.operands.isNotEmpty;
+    final forms = candidates.where(
       (op) => (op.operand == OperandKind.indexedB) == indexed,
-      orElse: () => indexed
-          ? throw AssemblerError(
-              '${s.keyword} cannot take [B]; only LDA [B] is indexed',
-              line: s.line,
-            )
-          : candidates.first,
+    );
+    if (forms.isEmpty) {
+      throw AssemblerError(
+        '${s.keyword} cannot take [B]; only LDA [B] is indexed',
+        line: s.line,
+      );
+    }
+    final opcode = forms.firstWhere(
+      (op) => indexed || op.takesValue == hasOperand,
+      orElse: () => forms.first,
     );
     if (!opcode.isAvailableIn(mode)) {
       throw AssemblerError(
@@ -312,12 +318,12 @@ class Assembler {
 
     final min = opcode.operand == OperandKind.immediate ? -128 : 0;
     if (operand < min || operand > 255) {
-      throw AssemblerError(
-        opcode.operand == OperandKind.immediate
-            ? 'Value must be -128..255 (8-bit), got $operand'
-            : 'Address must be 0-255 (8-bit), got $operand',
-        line: s.line,
-      );
+      throw AssemblerError(switch (opcode.operand) {
+        OperandKind.immediate =>
+          'Value must be -128..255 (8-bit), got $operand',
+        OperandKind.port => 'Port must be 0-255, got $operand',
+        _ => 'Address must be 0-255 (8-bit), got $operand',
+      }, line: s.line);
     }
     return [code, operand & 0xFF];
   }

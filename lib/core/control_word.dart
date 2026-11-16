@@ -77,7 +77,16 @@ enum ControlWord {
   sl(ControlSignal.sl, 0x800000),
 
   // ? Bit 24 - ALU shift right
-  sr(ControlSignal.sr, 0x1000000);
+  sr(ControlSignal.sr, 0x1000000),
+
+  // ? Bit 25 - Port register In (selects the I/O port)
+  pi(ControlSignal.pi, 0x2000000),
+
+  // ? Bit 26 - Device In (the device at the selected port reads the bus)
+  di(ControlSignal.di, 0x4000000),
+
+  // ? Bit 27 - Device Out (the device at the selected port drives the bus)
+  dout(ControlSignal.dout, 0x8000000);
 
   final ControlSignal controlSignal;
   final int hex;

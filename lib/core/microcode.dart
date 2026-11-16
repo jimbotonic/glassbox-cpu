@@ -44,6 +44,9 @@ class Microcode {
   static final int _xr = ControlWord.xr.hex;
   static final int _sl = ControlWord.sl.hex;
   static final int _sr = ControlWord.sr.hex;
+  static final int _pi = ControlWord.pi.hex;
+  static final int _di = ControlWord.di.hex;
+  static final int _do = ControlWord.dout.hex;
 
   /// T0: MAR <- PC.  T1: IR <- RAM[MAR], PC++.
   static final List<int> fetch = List.unmodifiable([
@@ -133,6 +136,10 @@ class Microcode {
     ]),
     // Pop the saved PC, then step over the CALL's operand byte.
     Opcode.ret: List<int>.unmodifiable([_spInc, _spo | _mi, _ro | _j, _ce]),
+    // Port number into the port register, then A to that device...
+    Opcode.outPort: _immediate(_pi, [_ao | _di]),
+    // ...or that device's value into A. IN sets no flags: only the ALU does.
+    Opcode.inPort: _immediate(_pi, [_do | _ai]),
   });
 
   /// Whether the conditional jump [opcode] is taken with these flags, or

@@ -1,5 +1,6 @@
 import 'control_word.dart';
 import 'cpu_mode.dart';
+import 'io/io_ports.dart';
 import 'microcode.dart';
 import 'opcode.dart';
 
@@ -12,11 +13,17 @@ import 'opcode.dart';
 ///
 /// [mode] picks the machine: Classic (16 bytes, 4-bit addresses) or
 /// Extended (256 bytes, 8-bit addresses, stack pointer, more ALU
-/// operations). See [CpuMode].
+/// operations, I/O ports). See [CpuMode].
+///
+/// Devices sit on numbered ports behind [io]. `OUT port` latches the port
+/// number into [portRegister] (PI), then the device there reads the bus
+/// (DI); `IN port` has the device drive the bus (DO). Port 0 is the output
+/// register, so plain `OUT` and `OUT 0` both feed the display.
 class Cpu {
-  Cpu({CpuMode mode = CpuMode.classic})
+  Cpu({CpuMode mode = CpuMode.classic, IoPorts? io})
     : _mode = mode,
-      ram = List.filled(mode.ramSize, 0);
+      ram = List.filled(mode.ramSize, 0),
+      io = io ?? IoPorts.standard();
 
   CpuMode get mode => _mode;
   CpuMode _mode;
@@ -29,8 +36,11 @@ class Cpu {
   List<int> get program => _program;
   List<int> _program = const [];
 
-  /// Called with the value latched into the output register (OI).
+  /// Called with the value latched into the output register (port 0).
   void Function(int value)? onOutput;
+
+  /// Devices on the I/O ports.
+  final IoPorts io;
 
   // Bus
   int bus = 0;
@@ -49,6 +59,9 @@ class Cpu {
   /// top of RAM.
   int stackPointer = initialStackPointer;
   static const int initialStackPointer = 0xFF;
+
+  /// Port selected by the last PI (Extended mode).
+  int portRegister = 0;
 
   // Flags
   bool carryFlag = false;
@@ -107,6 +120,7 @@ class Cpu {
     outputRegister = 0;
     sumRegister = 0;
     stackPointer = initialStackPointer;
+    portRegister = 0;
     carryFlag = false;
     zeroFlag = false;
     halted = false;
@@ -114,6 +128,7 @@ class Cpu {
     controlWord = 0;
     executedStep = null;
     instructionAddress = 0;
+    io.reset();
 
     ram.fillRange(0, ramSize, 0);
     ram.setRange(0, _program.length, _program);
@@ -176,6 +191,8 @@ class Cpu {
     outputRegister = s._outputRegister;
     sumRegister = s._sumRegister;
     stackPointer = s._stackPointer;
+    portRegister = s._portRegister;
+    io.restore(s._io);
     carryFlag = s._carryFlag;
     zeroFlag = s._zeroFlag;
     halted = s._halted;
@@ -249,6 +266,8 @@ class Cpu {
     } else if (on(ControlWord.so)) {
       sumRegister = alu.value;
       bus = sumRegister;
+    } else if (on(ControlWord.dout)) {
+      bus = readPort(portRegister);
     } else {
       busActive = false; // nothing drives the bus; it keeps its last value
     }
@@ -259,10 +278,9 @@ class Cpu {
     if (on(ControlWord.ii)) instructionRegister = bus;
     if (on(ControlWord.ai)) registerA = bus;
     if (on(ControlWord.bi)) registerB = bus;
-    if (on(ControlWord.oi)) {
-      outputRegister = bus;
-      onOutput?.call(outputRegister);
-    }
+    if (on(ControlWord.oi)) _writePort(IoPorts.displayPort, bus);
+    if (on(ControlWord.pi)) portRegister = bus;
+    if (on(ControlWord.di)) _writePort(portRegister, bus);
     if (on(ControlWord.j)) programCounter = bus & mask;
     if (on(ControlWord.ce)) programCounter = (programCounter + 1) & mask;
     if (on(ControlWord.spInc)) stackPointer = (stackPointer + 1) & 0xFF;
@@ -272,6 +290,23 @@ class Cpu {
       zeroFlag = alu.value == 0;
     }
     if (on(ControlWord.hlt)) halted = true;
+  }
+
+  /// What the device at [port] drives onto the bus; port 0 is the output
+  /// register.
+  int readPort(int port) =>
+      port == IoPorts.displayPort ? outputRegister : io.read(port);
+
+  /// [readPort] without side effects, for showing a port's value.
+  int peekPort(int port) =>
+      port == IoPorts.displayPort ? outputRegister : io.peek(port);
+
+  void _writePort(int port, int value) {
+    if (port == IoPorts.displayPort) {
+      outputRegister = value;
+      onOutput?.call(value);
+    }
+    io.write(port, value);
   }
 }
 
@@ -289,6 +324,8 @@ class CpuSnapshot {
       _outputRegister = cpu.outputRegister,
       _sumRegister = cpu.sumRegister,
       _stackPointer = cpu.stackPointer,
+      _portRegister = cpu.portRegister,
+      _io = cpu.io.save(),
       _carryFlag = cpu.carryFlag,
       _zeroFlag = cpu.zeroFlag,
       _halted = cpu.halted,
@@ -308,6 +345,8 @@ class CpuSnapshot {
   final int _outputRegister;
   final int _sumRegister;
   final int _stackPointer;
+  final int _portRegister;
+  final List<Object?> _io;
   final bool _carryFlag;
   final bool _zeroFlag;
   final bool _halted;

@@ -14,6 +14,9 @@ enum OperandKind {
 
   /// The address held in register B: `LDA [B]`. No operand byte.
   indexedB,
+
+  /// An I/O port number, 0-255: `OUT port`.
+  port,
 }
 
 /// Every instruction of both machines.
@@ -109,7 +112,10 @@ enum Opcode {
     usage: 'LDA [B]',
     extended: 0x30,
     operand: OperandKind.indexedB,
-  );
+  ),
+  // `OUT` with a port number; plain `OUT` is port 0.
+  outPort('OUT', usage: 'OUT port', extended: 0x18, operand: OperandKind.port),
+  inPort('IN', usage: 'IN port', extended: 0x19, operand: OperandKind.port);
 
   final String mnemonic;
   final String usage;
@@ -134,7 +140,9 @@ enum Opcode {
 
   /// Whether the operand is a value or address (as opposed to `[B]`).
   bool get takesValue =>
-      operand == OperandKind.address || operand == OperandKind.immediate;
+      operand == OperandKind.address ||
+      operand == OperandKind.immediate ||
+      operand == OperandKind.port;
 
   bool isAvailableIn(CpuMode mode) =>
       mode == CpuMode.extended || classic != null;

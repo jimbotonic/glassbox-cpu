@@ -20,6 +20,7 @@ const List<SignalGroup> _allGroups = [
     ControlWord.bo,
     ControlWord.spo,
     ControlWord.so,
+    ControlWord.dout,
   ]),
   SignalGroup('Read bus', BusRole.read, [
     ControlWord.mi,
@@ -29,6 +30,8 @@ const List<SignalGroup> _allGroups = [
     ControlWord.bi,
     ControlWord.oi,
     ControlWord.j,
+    ControlWord.pi,
+    ControlWord.di,
   ]),
   SignalGroup('Counters', BusRole.count, [
     ControlWord.ce,
@@ -82,6 +85,8 @@ String wordNote(int word) {
       ? 'SP'
       : on(ControlWord.so)
       ? 'ALU'
+      : on(ControlWord.dout)
+      ? 'device'
       : null;
   final readers = [
     if (on(ControlWord.mi)) 'MAR',
@@ -91,6 +96,8 @@ String wordNote(int word) {
     if (on(ControlWord.bi)) 'B',
     if (on(ControlWord.oi)) 'OUT',
     if (on(ControlWord.j)) 'PC',
+    if (on(ControlWord.pi)) 'PORT',
+    if (on(ControlWord.di)) 'device',
   ];
   return [
     if (source != null)

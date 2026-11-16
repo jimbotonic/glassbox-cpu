@@ -14,7 +14,8 @@ enum CpuMode {
   extended(
     'Extended',
     ramSize: 256,
-    description: '256 bytes of RAM, 8-bit operands, stack, 27 instructions',
+    description:
+        '256 bytes of RAM, 8-bit operands, stack, I/O ports, 29 instructions',
   );
 
   final String label;

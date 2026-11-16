@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'core/assembler.dart';
 import 'core/cpu.dart';
 import 'core/cpu_mode.dart';
+import 'core/io/keypad.dart';
 import 'cpu_layout.dart';
 import 'ui/theme/glass.dart';
 
@@ -260,6 +261,9 @@ class _CPUBoardState extends State<CPUBoard> {
         },
         onCursorAddressChanged: (address) {
           setState(() => cursorAddress = address);
+        },
+        onKeypadKey: (key) {
+          setState(() => cpu.io.device<Keypad>()?.press(key));
         },
       ),
     );

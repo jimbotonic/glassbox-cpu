@@ -53,8 +53,8 @@ void main() {
       expect(cpu.ram.length, 16);
     });
 
-    test('Extended has 27 instructions, Classic 11', () {
-      expect(Opcode.forMode(extended), hasLength(27));
+    test('Extended has 29 instructions, Classic 11', () {
+      expect(Opcode.forMode(extended), hasLength(29));
       expect(Opcode.forMode(CpuMode.classic), hasLength(11));
       final codes = Opcode.values.map((op) => op.extended).toSet();
       expect(codes, hasLength(Opcode.values.length), reason: 'unique codes');

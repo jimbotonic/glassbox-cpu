@@ -74,7 +74,16 @@ enum ControlSignal {
   sl('SL'),
 
   // ? ALU function: shift A right
-  sr('SR');
+  sr('SR'),
+
+  // ? Port register In: selects the I/O port
+  pi('PI'),
+
+  // ? Device In: the device at the selected port reads the bus
+  di('DI'),
+
+  // ? Device Out: the device at the selected port drives the bus
+  dout('DO');
 
   final String mnemonic;
   const ControlSignal(this.mnemonic);

@@ -186,6 +186,34 @@ class InstructionSetDialog extends StatelessWidget {
             operandType: 'None',
           ),
         ]),
+        const SizedBox(height: 16),
+        _buildInstructionCategory('EXTENDED: I/O PORTS', [
+          const _InstructionInfo(
+            mnemonic: 'OUT port',
+            hex: '0x18',
+            usage: 'OUT 2',
+            description: 'Write A to the device on a port.',
+            behavior:
+                'The operand byte goes into the port register (RO|PI|CE), '
+                'then A drives the bus and the device there reads it '
+                '(AO|DI). Plain OUT is port 0, the display.',
+            operandType: 'Port number (0-255), operand byte',
+            example: 'OUT 2 ; A -> LCD data: show a character',
+          ),
+          const _InstructionInfo(
+            mnemonic: 'IN port',
+            hex: '0x19',
+            usage: 'IN 5',
+            description: 'Read the device on a port into A.',
+            behavior:
+                'Selects the port (RO|PI|CE), then the device drives the bus '
+                'into A (DO|AI). Sets no flags: test the value with CMP. '
+                'A port with nothing connected reads 0.',
+            operandType: 'Port number (0-255), operand byte',
+            example: 'IN 5 ; A = last key pressed, or 0',
+          ),
+        ]),
+        const _PortMap(),
       ],
     );
   }
@@ -356,8 +384,8 @@ class InstructionSetDialog extends StatelessWidget {
             usage: 'OUT',
             description: 'Output - Displays value from A register.',
             behavior:
-                'Sends the current value of register A to the output display. '
-                'A register value remains unchanged.',
+                'Sends the current value of register A to the output display '
+                '(port 0). A register value remains unchanged.',
             operandType: 'None',
           ),
         ]),
@@ -597,6 +625,118 @@ class _OperandTypeCard extends StatelessWidget {
               fontSize: 12,
               height: 1.45,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What is connected to each I/O port.
+class _PortMap extends StatelessWidget {
+  const _PortMap();
+
+  static const _ports = [
+    ('0', 'Display', 'out', 'Output register: plain OUT, or OUT 0'),
+    (
+      '1',
+      'Text LCD command',
+      'out',
+      '0x01 clear, 0x0C display on, 0x80+addr cursor; IN: cursor address',
+    ),
+    ('2', 'Text LCD data', 'out', 'A character at the cursor, which moves on'),
+    (
+      '3',
+      'LED matrix row',
+      'out',
+      'Selects the row (0-7) the next data byte lights',
+    ),
+    (
+      '4',
+      'LED matrix data',
+      'out',
+      'Bit 7 = left LED; then the next row is selected',
+    ),
+    (
+      '5',
+      'Keypad',
+      'in',
+      "ASCII of the last key pressed ('0'-'9', 'A'-'D', '*', '#'), once; 0 if none",
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Glass.raised,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Glass.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Port map',
+            style: TextStyle(
+              color: Glass.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final (port, device, direction, meaning) in _ports)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    child: Text(
+                      port,
+                      style: const TextStyle(
+                        fontFamily: Glass.mono,
+                        color: Glass.synArg,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 130,
+                    child: Text(
+                      device,
+                      style: const TextStyle(color: Glass.text, fontSize: 12),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 30,
+                    child: Text(
+                      direction,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: direction == 'in'
+                            ? Glass.driveText
+                            : Glass.readText,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      meaning,
+                      style: const TextStyle(color: Glass.muted, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const Text(
+            'The LCD starts with its display off, like the real HD44780: '
+            'send 0x38 then 0x0C first. See the I/O devices built-in programs.',
+            style: TextStyle(color: Glass.dim, fontSize: 11),
           ),
         ],
       ),
