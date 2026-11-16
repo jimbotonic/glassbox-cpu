@@ -36,11 +36,21 @@ abstract class IoDevice {
 
   /// Puts back a state returned by [save].
   void restore(Object? state);
+
+  /// Port writes that bring a device fresh from [reset] to the current
+  /// state, as `(port, value)` pairs. A hardware bridge sends them to put a
+  /// real device back in step after a reset, a step-back or a reconnect.
+  /// Input-only devices have nothing to replay.
+  List<(int, int)> replay() => const [];
 }
 
 /// Called after every port write, port 0 included; a serial bridge can
 /// mirror these writes to real hardware.
 typedef PortWriteListener = void Function(int port, int value);
+
+/// Called after the devices jumped to another state ([IoPorts.reset] or
+/// [IoPorts.restore]) rather than changing through port writes.
+typedef PortStateListener = void Function();
 
 /// Routes port numbers to devices.
 ///
@@ -72,6 +82,7 @@ class IoPorts {
   final List<IoDevice> devices;
   final Map<int, IoDevice> _byPort = {};
   final List<PortWriteListener> _listeners = [];
+  final List<PortStateListener> _stateListeners = [];
 
   /// Device answering [port], or null (port 0, or nothing connected).
   IoDevice? deviceAt(int port) => _byPort[port & 0xFF];
@@ -94,6 +105,17 @@ class IoPorts {
   void removeListener(PortWriteListener listener) =>
       _listeners.remove(listener);
 
+  void addStateListener(PortStateListener listener) =>
+      _stateListeners.add(listener);
+  void removeStateListener(PortStateListener listener) =>
+      _stateListeners.remove(listener);
+
+  void _stateChanged() {
+    for (final listener in List.of(_stateListeners)) {
+      listener();
+    }
+  }
+
   /// Hands [value] to the device at [port], then tells the listeners.
   void write(int port, int value) {
     port &= 0xFF;
@@ -115,6 +137,7 @@ class IoPorts {
     for (final d in devices) {
       d.reset();
     }
+    _stateChanged();
   }
 
   /// States of all devices, for step-back.
@@ -125,5 +148,9 @@ class IoPorts {
     for (int i = 0; i < devices.length; i++) {
       devices[i].restore(states[i]);
     }
+    _stateChanged();
   }
+
+  /// Port writes rebuilding every device's state from power-on.
+  List<(int, int)> replay() => [for (final d in devices) ...d.replay()];
 }

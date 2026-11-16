@@ -7,6 +7,7 @@ import 'core/step_info.dart';
 import 'ui/about_dialog.dart';
 import 'ui/board/datapath.dart';
 import 'ui/board/devices_panel.dart';
+import 'ui/hardware/hardware_controller.dart';
 import 'ui/board/microcode_panel.dart';
 import 'ui/board/narration_strip.dart';
 import 'ui/board/ram_panel.dart';
@@ -52,6 +53,7 @@ class CPULayout extends StatelessWidget {
 
   // Devices
   final ValueChanged<String> onKeypadKey;
+  final HardwareController hardware;
 
   const CPULayout({
     super.key,
@@ -77,6 +79,7 @@ class CPULayout extends StatelessWidget {
     required this.onBreakpointsChanged,
     required this.onCursorAddressChanged,
     required this.onKeypadKey,
+    required this.hardware,
   });
 
   static const double _gap = 14;
@@ -143,7 +146,11 @@ class CPULayout extends StatelessWidget {
                         ),
                         if (cpu.mode == CpuMode.extended) ...[
                           const SizedBox(height: _gap),
-                          DevicesPanel(cpu: cpu, onKey: onKeypadKey),
+                          DevicesPanel(
+                            cpu: cpu,
+                            onKey: onKeypadKey,
+                            hardware: hardware,
+                          ),
                         ],
                         if (detailedView) ...[
                           const SizedBox(height: _gap),

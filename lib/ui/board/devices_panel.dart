@@ -6,6 +6,8 @@ import '../../core/io/io_ports.dart';
 import '../../core/io/keypad.dart';
 import '../../core/io/led_matrix.dart';
 import '../../core/io/text_lcd.dart';
+import '../hardware/hardware_controller.dart';
+import '../hardware/hardware_dialog.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 
@@ -18,7 +20,15 @@ class DevicesPanel extends StatelessWidget {
   /// The user pressed a keypad key.
   final ValueChanged<String> onKey;
 
-  const DevicesPanel({super.key, required this.cpu, required this.onKey});
+  /// The link to a real board mirroring these devices.
+  final HardwareController hardware;
+
+  const DevicesPanel({
+    super.key,
+    required this.cpu,
+    required this.onKey,
+    required this.hardware,
+  });
 
   /// What [device] does on the bus during the step just executed.
   BusRole _role(IoDevice device) {
@@ -41,19 +51,19 @@ class DevicesPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+          Row(
             children: [
-              Text('I/O DEVICES', style: Glass.panelTitle),
-              SizedBox(width: 10),
-              Expanded(
+              const Text('I/O DEVICES', style: Glass.panelTitle),
+              const SizedBox(width: 10),
+              const Expanded(
                 child: Text(
                   'OUT port writes A to a device · IN port reads one into A',
                   style: Glass.note,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 10),
+              _HardwareButton(hardware: hardware),
             ],
           ),
           const SizedBox(height: 12),
@@ -83,6 +93,34 @@ class DevicesPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Shows whether a real board mirrors the devices; opens the dialog.
+class _HardwareButton extends StatelessWidget {
+  final HardwareController hardware;
+
+  const _HardwareButton({required this.hardware});
+
+  @override
+  Widget build(BuildContext context) {
+    final bridge = hardware.bridge;
+    final connected = hardware.connected;
+    final label = connected
+        ? 'Board: ${bridge.board!.board}'
+        : hardware.busy
+        ? 'Connecting…'
+        : 'Real hardware';
+    return GlassButton(
+      label: label,
+      height: 32,
+      tooltip: connected
+          ? 'Mirrored to ${bridge.link!.description}'
+          : 'Mirror these devices to an Arduino, ESP32 or Raspberry Pi',
+      fill: connected ? Glass.okText.withValues(alpha: 0.12) : null,
+      foreground: connected ? Glass.okText : null,
+      onPressed: () => showHardwareDialog(context, hardware),
     );
   }
 }

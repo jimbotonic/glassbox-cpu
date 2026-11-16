@@ -47,6 +47,12 @@ class LedMatrix extends IoDevice {
   int read(int port) => port == rowPort ? _row : _rows[_row];
 
   @override
+  List<(int, int)> replay() => [
+    for (int r = 0; r < size; r++) ...[(rowPort, r), (dataPort, _rows[r])],
+    (rowPort, _row),
+  ];
+
+  @override
   void reset() {
     _rows.fillRange(0, size, 0);
     _row = 0;

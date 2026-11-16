@@ -6,6 +6,7 @@ import 'core/assembler.dart';
 import 'core/cpu.dart';
 import 'core/cpu_mode.dart';
 import 'core/io/keypad.dart';
+import 'ui/hardware/hardware_controller.dart';
 import 'cpu_layout.dart';
 import 'ui/theme/glass.dart';
 
@@ -24,6 +25,14 @@ typedef _HistoryEntry = ({CpuSnapshot snapshot, int outputCount});
 
 class _CPUBoardState extends State<CPUBoard> {
   final Cpu cpu = Cpu();
+
+  // Real board mirroring the I/O ports; it may also press keypad keys.
+  late final HardwareController hardware = HardwareController(cpu)
+    ..addListener(_hardwareChanged);
+
+  void _hardwareChanged() {
+    if (mounted) setState(() {});
+  }
 
   // Clock
   Timer? clockTimer;
@@ -59,6 +68,7 @@ class _CPUBoardState extends State<CPUBoard> {
 
   @override
   void dispose() {
+    hardware.dispose();
     clockTimer?.cancel();
     singleStepTimer?.cancel();
     super.dispose();
@@ -265,6 +275,7 @@ class _CPUBoardState extends State<CPUBoard> {
         onKeypadKey: (key) {
           setState(() => cpu.io.device<Keypad>()?.press(key));
         },
+        hardware: hardware,
       ),
     );
   }

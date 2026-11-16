@@ -144,7 +144,11 @@ The ALU always works on A and B, so ALU instructions overwrite B. The Extended c
 | 4    | LED matrix 8×8: data       | out       | The row's LEDs, bit 7 on the left; the next row is selected after it   |
 | 5    | Keypad 4×4                 | in        | ASCII of the last key pressed (`0`–`9`, `A`–`D`, `*`, `#`), read once; 0 if none |
 
-Like the real HD44780, the LCD starts with its display off: send `0x38` and `0x0C` first. An unconnected port reads 0. The *I/O devices* built-in programs drive each device. In code, every port write also reaches `cpu.io` listeners, the hook for mirroring writes to real hardware.
+Like the real HD44780, the LCD starts with its display off: send `0x38` and `0x0C` first. An unconnected port reads 0. The *I/O devices* built-in programs drive each device.
+
+#### Real hardware
+
+The *Real hardware* button in the I/O devices panel mirrors the ports to a real LCD, LED matrix, OLED and keypad, over USB serial or Wi-Fi. Firmware is included for Arduino Uno/Nano/Mega, ESP32, Raspberry Pi Pico (`firmware/arduino`) and Raspberry Pi (`firmware/raspberry-pi`). Wiring, setup and the protocol are in [docs/hardware-bridge.md](docs/hardware-bridge.md).
 
 ## Getting Started
 

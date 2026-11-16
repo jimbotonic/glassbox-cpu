@@ -214,6 +214,40 @@ class TextLcd extends IoDevice {
       ? _address & 0x7F
       : (_cgMode ? _cgram[_address] : _ddram[_address]);
 
+  /// Rebuilds the state with commands only the real chip also accepts:
+  /// memory contents first (entry mode left-to-right, no shift), then home,
+  /// the display shift, the cursor address, entry mode and display control.
+  @override
+  List<(int, int)> replay() {
+    final c = commandPort, d = dataPort;
+    return [
+      (c, _twoLines ? 0x38 : 0x30),
+      (c, 0x06),
+      if (_cgram.any((b) => b != 0)) ...[
+        (c, 0x40),
+        for (final b in _cgram) (d, b),
+      ],
+      for (final start in const [0x00, line2])
+        if (_ddram
+            .sublist(start, start + lineLength)
+            .any((b) => b != 0x20)) ...[
+          (c, 0x80 | start),
+          for (int i = 0; i < lineLength; i++) (d, _ddram[start + i]),
+        ],
+      (c, 0x02),
+      for (int i = 0; i < _shift; i++) (c, 0x18),
+      (c, _cgMode ? 0x40 | _address : 0x80 | _address),
+      (c, 0x04 | (_moveRight ? 0x02 : 0) | (_shiftOnWrite ? 0x01 : 0)),
+      (
+        c,
+        0x08 |
+            (_displayOn ? 0x04 : 0) |
+            (_cursorOn ? 0x02 : 0) |
+            (_blinkOn ? 0x01 : 0),
+      ),
+    ];
+  }
+
   @override
   void reset() {
     _ddram.fillRange(0, _ddram.length, 0x20);
