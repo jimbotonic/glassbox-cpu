@@ -185,7 +185,17 @@ class _ProgramEditorState extends State<ProgramEditor> {
     );
   }
 
-  double get _listingWidth => widget.mode == CpuMode.classic ? 46 : 54;
+  /// Gutter: breakpoint dot, line number, then the address listing, each
+  /// as wide as its widest text and no wider.
+  static const double _gutterPadding = 3;
+
+  /// Breakpoint dot, a gap, and the digits of the last line number at
+  /// 13 px monospace (about 7.8 px each).
+  double get _numberWidth => 7 + 3 + '$_lineCount'.length * 8.0;
+
+  /// `A 4F+` (Classic) or `0A 18+` (Extended) at 11 px, with a gap that
+  /// keeps it apart from the line number.
+  double get _listingWidth => widget.mode == CpuMode.classic ? 40 : 47;
 
   /// Listing column: address and first byte assembled from [line], e.g.
   /// `3 4F`, with a `+` when the line fills several bytes (a `.db` line,
@@ -392,7 +402,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
   }
 
   Widget _codeField(String hintText) => Padding(
-    padding: const EdgeInsets.all(8),
+    padding: const EdgeInsets.fromLTRB(6, 8, 8, 8),
     child: TextField(
       controller: _editorController,
       scrollController: _scrollController,
@@ -488,10 +498,10 @@ class _ProgramEditorState extends State<ProgramEditor> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Container(
-                    width: (_lineCount > 99 ? 44 : 34) + _listingWidth,
+                    width: 2 * _gutterPadding + _numberWidth + _listingWidth,
                     padding: const EdgeInsets.symmetric(
                       vertical: 8,
-                      horizontal: 4,
+                      horizontal: _gutterPadding,
                     ),
                     decoration: const BoxDecoration(
                       color: Glass.sunken,
