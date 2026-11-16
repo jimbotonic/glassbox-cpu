@@ -75,6 +75,8 @@ class RoleLabel extends StatelessWidget {
     };
     return Text(
       text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: color,
         fontSize: 11,

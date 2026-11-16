@@ -7,7 +7,8 @@ import '../../core/cpu_mode.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 
-/// Two rows: identity and how the board is shown, then execution.
+/// Identity, execution controls and view switches: one row on wide
+/// windows, two rows otherwise.
 class TopBar extends StatelessWidget {
   final CpuMode mode;
   final ValueChanged<CpuMode> onModeChanged;
@@ -70,6 +71,12 @@ class TopBar extends StatelessWidget {
     return '${hz.toStringAsFixed(0)} Hz';
   }
 
+  /// Below this width the bar splits into two rows.
+  static const double oneRowWidth = 1340;
+
+  /// From this width the one-row bar also shows the tagline.
+  static const double taglineWidth = 1560;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -79,173 +86,200 @@ class TopBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(Glass.radius),
         border: Border.all(color: Glass.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'GlassBox CPU',
-                style: TextStyle(
-                  color: Glass.text,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text('every signal visible', style: Glass.note),
-              const Spacer(),
-              Tooltip(
-                message:
-                    'Classic: ${CpuMode.classic.description}\n'
-                    'Extended: ${CpuMode.extended.description}\n'
-                    'Switching clears RAM.',
-                child: GlassSegmented<CpuMode>(
-                  semanticLabel: 'Machine',
-                  options: const [
-                    (CpuMode.classic, 'Classic', '16 B'),
-                    (CpuMode.extended, 'Extended', '256 B'),
-                  ],
-                  value: mode,
-                  onChanged: onModeChanged,
-                  selectedFill: const Color(0xFF22303F),
-                  selectedText: Glass.driveChip,
-                ),
-              ),
-              const SizedBox(width: 12),
-              GlassSegmented<bool>(
-                semanticLabel: 'View',
-                options: const [
-                  (false, 'Simple', null),
-                  (true, 'Detailed', null),
-                ],
-                value: detailed,
-                onChanged: onDetailedChanged,
-              ),
-              const SizedBox(width: 8),
-              GlassButton(
-                icon: FluentIcons.info_24_regular,
-                tooltip: 'About GlassBox CPU',
-                onPressed: onAbout,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Divider(height: 1, thickness: 1, color: Glass.borderSoft),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 24,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  GlassButton(
-                    icon: FluentIcons.arrow_previous_24_regular,
-                    tooltip: 'Step back: undo the last step',
-                    onPressed: onStepBack,
-                  ),
-                  GlassButton(
-                    label: 'Step',
-                    detail: 'cycle',
-                    tooltip: 'One clock cycle (micro-step)',
-                    onPressed: onStep,
-                  ),
-                  GlassButton(
-                    label: 'Step',
-                    detail: 'instruction',
-                    tooltip: 'Run the rest of the current instruction',
-                    onPressed: onInstructionStep,
-                  ),
-                  GlassButton(
-                    label: isRunning ? 'Pause' : 'Run',
-                    icon: isRunning
-                        ? FluentIcons.pause_24_filled
-                        : FluentIcons.play_24_filled,
-                    primary: true,
-                    tooltip: 'Run until a breakpoint or HLT',
-                    onPressed: onRunToggle,
-                  ),
-                  GlassButton(
-                    label: 'Run to cursor',
-                    tooltip:
-                        'Run until the instruction on the editor cursor line',
-                    onPressed: onRunToCursor,
-                  ),
-                  GlassButton(
-                    label: 'Reset',
-                    tooltip: 'Restart the loaded program',
-                    onPressed: onReset,
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Tooltip(
-                    message: halted
-                        ? 'Halted'
-                        : 'Clock ${clockHigh ? 'high' : 'low'}',
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: clockHigh ? Glass.led : const Color(0xFF3A2020),
-                        boxShadow: clockHigh
-                            ? [
-                                BoxShadow(
-                                  color: Glass.led.withValues(alpha: 0.7),
-                                  blurRadius: 8,
-                                ),
-                              ]
-                            : null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('Clock', style: Glass.note),
-                  SizedBox(
-                    width: 180,
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: Glass.drive,
-                        inactiveTrackColor: Glass.border,
-                        thumbColor: Glass.driveText,
-                        overlayColor: Glass.drive.withValues(alpha: 0.15),
-                        trackHeight: 3,
-                        tickMarkShape: SliderTickMarkShape.noTickMark,
-                      ),
-                      child: Slider(
-                        value: speedIndex(speed).toDouble(),
-                        max: (speeds.length - 1).toDouble(),
-                        divisions: speeds.length - 1,
-                        label: formatSpeed(speed),
-                        semanticFormatterCallback: (v) =>
-                            formatSpeed(speeds[v.round()]),
-                        onChanged: (v) => onSpeedChanged(speeds[v.round()]),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 56,
-                    child: Text(
-                      formatSpeed(speed),
-                      style: const TextStyle(
-                        fontFamily: Glass.mono,
-                        fontSize: 13,
-                        color: Glass.text,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          return w >= oneRowWidth
+              ? _oneRow(context, tagline: w >= taglineWidth)
+              : _twoRows(context);
+        },
       ),
     );
   }
+
+  Widget _title({required bool tagline}) => Row(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.baseline,
+    textBaseline: TextBaseline.alphabetic,
+    children: [
+      const Text(
+        'GlassBox CPU',
+        style: TextStyle(
+          color: Glass.text,
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      if (tagline) ...[
+        const SizedBox(width: 10),
+        const Text('every signal visible', style: Glass.note),
+      ],
+    ],
+  );
+
+  /// Machine and view switches, and the About button.
+  List<Widget> _switches() => [
+    Tooltip(
+      message:
+          'Classic: ${CpuMode.classic.description}\n'
+          'Extended: ${CpuMode.extended.description}\n'
+          'Switching clears RAM.',
+      child: GlassSegmented<CpuMode>(
+        semanticLabel: 'Machine',
+        options: const [
+          (CpuMode.classic, 'Classic', '16 B'),
+          (CpuMode.extended, 'Extended', '256 B'),
+        ],
+        value: mode,
+        onChanged: onModeChanged,
+        selectedFill: const Color(0xFF22303F),
+        selectedText: Glass.driveChip,
+      ),
+    ),
+    const SizedBox(width: 12),
+    GlassSegmented<bool>(
+      semanticLabel: 'View',
+      options: const [(false, 'Simple', null), (true, 'Detailed', null)],
+      value: detailed,
+      onChanged: onDetailedChanged,
+    ),
+    const SizedBox(width: 8),
+    GlassButton(
+      icon: FluentIcons.info_24_regular,
+      tooltip: 'About GlassBox CPU',
+      onPressed: onAbout,
+    ),
+  ];
+
+  Widget _controls() => Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: [
+      GlassButton(
+        icon: FluentIcons.arrow_previous_24_regular,
+        tooltip: 'Step back: undo the last step',
+        onPressed: onStepBack,
+      ),
+      GlassButton(
+        label: 'Step',
+        detail: 'cycle',
+        tooltip: 'One clock cycle (micro-step)',
+        onPressed: onStep,
+      ),
+      GlassButton(
+        label: 'Step',
+        detail: 'instruction',
+        tooltip: 'Run the rest of the current instruction',
+        onPressed: onInstructionStep,
+      ),
+      GlassButton(
+        label: isRunning ? 'Pause' : 'Run',
+        icon: isRunning
+            ? FluentIcons.pause_24_filled
+            : FluentIcons.play_24_filled,
+        primary: true,
+        tooltip: 'Run until a breakpoint or HLT',
+        onPressed: onRunToggle,
+      ),
+      GlassButton(
+        label: 'Run to cursor',
+        tooltip: 'Run until the instruction on the editor cursor line',
+        onPressed: onRunToCursor,
+      ),
+      GlassButton(
+        label: 'Reset',
+        tooltip: 'Restart the loaded program',
+        onPressed: onReset,
+      ),
+    ],
+  );
+
+  Widget _clock(BuildContext context, {bool compact = false}) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Tooltip(
+        message: halted ? 'Halted' : 'Clock ${clockHigh ? 'high' : 'low'}',
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: clockHigh ? Glass.led : const Color(0xFF3A2020),
+            boxShadow: clockHigh
+                ? [
+                    BoxShadow(
+                      color: Glass.led.withValues(alpha: 0.7),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      const Text('Clock', style: Glass.note),
+      SizedBox(
+        width: compact ? 140 : 180,
+        child: SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: Glass.drive,
+            inactiveTrackColor: Glass.border,
+            thumbColor: Glass.driveText,
+            overlayColor: Glass.drive.withValues(alpha: 0.15),
+            trackHeight: 3,
+            tickMarkShape: SliderTickMarkShape.noTickMark,
+          ),
+          child: Slider(
+            value: speedIndex(speed).toDouble(),
+            max: (speeds.length - 1).toDouble(),
+            divisions: speeds.length - 1,
+            label: formatSpeed(speed),
+            semanticFormatterCallback: (v) => formatSpeed(speeds[v.round()]),
+            onChanged: (v) => onSpeedChanged(speeds[v.round()]),
+          ),
+        ),
+      ),
+      SizedBox(
+        width: 56,
+        child: Text(
+          formatSpeed(speed),
+          style: const TextStyle(
+            fontFamily: Glass.mono,
+            fontSize: 13,
+            color: Glass.text,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  /// Everything on one line, for wide windows.
+  Widget _oneRow(BuildContext context, {required bool tagline}) => Row(
+    children: [
+      _title(tagline: tagline),
+      const SizedBox(width: 20),
+      _controls(),
+      const SizedBox(width: 20),
+      _clock(context, compact: true),
+      const Spacer(),
+      ..._switches(),
+    ],
+  );
+
+  /// Identity and view on top, execution below.
+  Widget _twoRows(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(children: [_title(tagline: true), const Spacer(), ..._switches()]),
+      const SizedBox(height: 10),
+      const Divider(height: 1, thickness: 1, color: Glass.borderSoft),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 24,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [_controls(), _clock(context)],
+      ),
+    ],
+  );
 }

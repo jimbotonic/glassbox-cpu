@@ -84,6 +84,11 @@ class CPULayout extends StatelessWidget {
 
   static const double _gap = 14;
 
+  /// The editor takes about 28% of the board, so long comment lines fit on
+  /// wide screens, within 420–560 px.
+  static double editorWidth(double boardWidth) =>
+      (boardWidth * 0.28).clamp(420.0, 560.0);
+
   @override
   Widget build(BuildContext context) {
     final info = StepInfo.of(cpu);
@@ -121,58 +126,60 @@ class CPULayout extends StatelessWidget {
           ),
           const SizedBox(height: _gap),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: 300,
-                  child: RamPanel(
-                    cpu: cpu,
-                    assembly: assembly,
-                    onEdit: onRamEdit,
-                  ),
-                ),
-                const SizedBox(width: _gap),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Datapath(
-                          cpu: cpu,
-                          info: info,
-                          assembly: assembly,
-                          outputs: outputs,
-                        ),
-                        if (cpu.mode == CpuMode.extended) ...[
-                          const SizedBox(height: _gap),
-                          DevicesPanel(
-                            cpu: cpu,
-                            onKey: onKeypadKey,
-                            hardware: hardware,
-                          ),
-                        ],
-                        if (detailedView) ...[
-                          const SizedBox(height: _gap),
-                          MicrocodePanel(cpu: cpu),
-                        ],
-                      ],
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: RamPanel(
+                      cpu: cpu,
+                      assembly: assembly,
+                      onEdit: onRamEdit,
                     ),
                   ),
-                ),
-                const SizedBox(width: _gap),
-                SizedBox(
-                  width: 400,
-                  child: ProgramEditor(
-                    onAssemble: onAssemble,
-                    currentAddress: highlightAddress,
-                    onBreakpointsChanged: onBreakpointsChanged,
-                    onCursorAddressChanged: onCursorAddressChanged,
-                    mode: cpu.mode,
-                    onModeChanged: onModeChanged,
+                  const SizedBox(width: _gap),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Datapath(
+                            cpu: cpu,
+                            info: info,
+                            assembly: assembly,
+                            outputs: outputs,
+                          ),
+                          if (cpu.mode == CpuMode.extended) ...[
+                            const SizedBox(height: _gap),
+                            DevicesPanel(
+                              cpu: cpu,
+                              onKey: onKeypadKey,
+                              hardware: hardware,
+                            ),
+                          ],
+                          if (detailedView) ...[
+                            const SizedBox(height: _gap),
+                            MicrocodePanel(cpu: cpu),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: _gap),
+                  SizedBox(
+                    width: editorWidth(constraints.maxWidth),
+                    child: ProgramEditor(
+                      onAssemble: onAssemble,
+                      currentAddress: highlightAddress,
+                      onBreakpointsChanged: onBreakpointsChanged,
+                      onCursorAddressChanged: onCursorAddressChanged,
+                      mode: cpu.mode,
+                      onModeChanged: onModeChanged,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

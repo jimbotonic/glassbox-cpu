@@ -102,7 +102,7 @@ class NarrationStrip extends StatelessWidget {
       label: 'Last step',
       liveRegion: true,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
         decoration: BoxDecoration(
           color: Glass.busGround,
           borderRadius: BorderRadius.circular(Glass.radius),
@@ -170,7 +170,7 @@ class NarrationStrip extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 3),
             Text(
               _nextText(),
               style: const TextStyle(fontSize: 12, color: Glass.busMuted),

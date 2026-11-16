@@ -150,7 +150,7 @@ class Datapath extends StatelessWidget {
           idle: '8-bit',
           countText: _on(ControlWord.spInc) ? '+1' : '−1',
           note: stackDepth == 0
-              ? 'stack empty · grows down from 0xFF'
+              ? 'empty · grows down'
               : '$stackDepth byte${stackDepth == 1 ? '' : 's'} on the stack',
           stubOnRight: true,
         ),
@@ -368,9 +368,10 @@ class _Module extends StatelessWidget {
     final panel = Expanded(
       child: Semantics(
         label: '$name ${Glass.hex2(value)}',
+        // Two rows: name, role and value; then the bit LEDs and the note.
         child: GlassPanel(
           role: role,
-          padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
+          padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -378,21 +379,17 @@ class _Module extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
+                  // The name always shows in full; the role gives way.
+                  Text(name, style: Glass.panelTitle, maxLines: 1),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      name,
-                      style: Glass.panelTitle,
-                      overflow: TextOverflow.ellipsis,
+                    child: RoleLabel(
+                      role: role,
+                      idle: idle,
+                      countText: countText,
                     ),
                   ),
-                  RoleLabel(role: role, idle: idle, countText: countText),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  LedRow(value: value, bits: bits),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
                     bits <= 4
                         ? '0x${value.toRadixString(16).toUpperCase()}'
@@ -401,12 +398,24 @@ class _Module extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                note,
-                style: Glass.note,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 3),
+              Row(
+                children: [
+                  LedRow(value: value, bits: bits),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Tooltip(
+                      message: note,
+                      waitDuration: const Duration(milliseconds: 600),
+                      child: Text(
+                        note,
+                        style: Glass.note,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -426,7 +435,7 @@ class _FlagsWire extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 26,
+      height: 20,
       child: Row(
         children: [
           const SizedBox(width: 28 + 28),
@@ -461,7 +470,7 @@ class _Flags extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget flag(String letter, bool set, String name) => Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 3),
         decoration: BoxDecoration(
           color: set ? const Color(0xFF2A1414) : Glass.ground,
           borderRadius: BorderRadius.circular(6),
@@ -493,14 +502,19 @@ class _Flags extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 28),
       child: GlassPanel(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        padding: const EdgeInsets.fromLTRB(14, 7, 14, 8),
         borderColor: latched ? Glass.count : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                const Expanded(child: Text('FLAGS', style: Glass.panelTitle)),
+                const Text('FLAGS', style: Glass.panelTitle),
+                const SizedBox(width: 12),
+                flag('C', cpu.carryFlag, 'carry'),
+                const SizedBox(width: 8),
+                flag('Z', cpu.zeroFlag, 'zero'),
+                const SizedBox(width: 12),
                 RoleLabel(
                   role: latched ? BusRole.count : BusRole.idle,
                   idle: 'kept',
@@ -508,15 +522,7 @@ class _Flags extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                flag('C', cpu.carryFlag, 'carry'),
-                const SizedBox(width: 8),
-                flag('Z', cpu.zeroFlag, 'zero'),
-              ],
-            ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Text(
               cpu.mode == CpuMode.classic
                   ? '→ microcode: decides JC, JZ'
