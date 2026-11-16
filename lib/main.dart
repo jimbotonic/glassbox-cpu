@@ -43,8 +43,8 @@ class _App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const requiredWidth = 1400;
-    const requiredHeight = 900;
+    const requiredWidth = 1340;
+    const requiredHeight = 640;
     final size = MediaQuery.of(context).size;
     final width = size.width;
     final height = size.height;
