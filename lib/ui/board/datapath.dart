@@ -35,9 +35,11 @@ class Datapath extends StatelessWidget {
   static const double _stub = 28;
   static const double _spine = 4;
 
-  /// How far the display wire drops below the output register before it
-  /// turns toward the display.
-  static const double _wireDrop = 14;
+  /// Where the output register meets the bus, and where its wire to the
+  /// display leaves, measured up from the register's bottom edge. The bus
+  /// line ends at the first, so the wire passes under its end.
+  static const double _outBusFromBottom = 42;
+  static const double _outWireFromBottom = 17;
 
   bool _on(ControlWord s) => s.isActive(cpu.controlWord);
 
@@ -199,13 +201,15 @@ class Datapath extends StatelessWidget {
         ],
       ),
       if (extended) _portModule(),
-      // Last on the right: its wire to the display leaves from below.
+      // Last on the right, level with the display's foot: it meets the bus
+      // high on its left side, and its wire to the display leaves lower down.
       _Module(
         name: 'OUTPUT REGISTER',
         value: cpu.outputRegister,
         role: _role(null, ControlWord.oi),
         idle: 'port 0',
         note: '${_decoded(cpu.outputRegister)} · drives the display',
+        stubFromBottom: _outBusFromBottom,
       ),
     ];
     final outActive = _on(ControlWord.oi);
@@ -215,18 +219,17 @@ class Datapath extends StatelessWidget {
       children: [
         _BusHeader(info: info),
         const SizedBox(height: 10),
-        // The display sits under the left column, beside the last cards on
-        // the right; the bus line ends at the output register, and the red
-        // wire runs from that register's foot, under the bus, to the display.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _column(left),
-                  const SizedBox(height: _gap),
+        // Both columns stretch to the taller one; the shorter spreads its
+        // gaps. The display ends the left column and the output register the
+        // right, bottoms level, so the red wire runs straight across from the
+        // register's left side, under the end of the bus line, to the display.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _spread([
+                  ...left,
                   Padding(
                     padding: const EdgeInsets.only(right: _stub),
                     child: _Display(
@@ -235,40 +238,51 @@ class Datapath extends StatelessWidget {
                       active: outActive,
                     ),
                   ),
-                ],
+                ]),
               ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  IntrinsicHeight(
-                    child: Row(
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
+                        SizedBox(
                           width: _spine,
-                          decoration: BoxDecoration(
-                            color: Glass.bus.withValues(
-                              alpha: info.source == null ? 0.3 : 0.6,
-                            ),
-                            borderRadius: BorderRadius.circular(2),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Glass.bus.withValues(
+                                      alpha: info.source == null ? 0.3 : 0.6,
+                                    ),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: _outBusFromBottom - 1.5),
+                            ],
                           ),
                         ),
-                        Expanded(child: _column(right)),
+                        Expanded(child: _spread(right)),
                       ],
                     ),
-                  ),
-                  SizedBox(
-                    height: _wireDrop + 6,
-                    child: CustomPaint(
-                      painter: _DisplayWire(active: outActive),
+                    Positioned(
+                      left: -_stub,
+                      width: _stub + _spine + _stub,
+                      bottom: _outWireFromBottom - 6,
+                      height: 12,
+                      child: CustomPaint(
+                        painter: _DisplayWire(active: outActive),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -301,22 +315,25 @@ class Datapath extends StatelessWidget {
     );
   }
 
-  Widget _column(List<Widget> children) => Column(
+  /// A column whose gaps grow, from [_gap], to fill the height it is given.
+  Widget _spread(List<Widget> children) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      for (int i = 0; i < children.length; i++) ...[
-        if (i > 0) const SizedBox(height: _gap),
-        children[i],
-      ],
+      for (int i = 0; i < children.length; i++)
+        i < children.length - 1
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: _gap),
+                child: children[i],
+              )
+            : children[i],
     ],
   );
 }
 
-/// The output register's wire to the display: down from the middle of the
-/// register's foot, then left under the end of the bus line, ending in an
-/// arrow at the display's right edge. Drawn from the top of the area just
-/// below the register; the horizontal run reaches past the area's left edge
-/// (painting is not clipped) across the stub gap to the display.
+/// The output register's wire to the display: straight left from the
+/// register's side, across the stub gaps and under the end of the bus line,
+/// ending in an arrow at the display's right edge.
 class _DisplayWire extends CustomPainter {
   final bool active;
 
@@ -324,30 +341,23 @@ class _DisplayWire extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stub = Datapath._stub;
-    const spine = Datapath._spine;
-    final x0 = spine + stub + (size.width - spine - stub) / 2;
-    const y = Datapath._wireDrop;
-    const left = -stub + 6; // stop short of the display, for the arrow
-    final paint = Paint()
-      ..color = Glass.led.withValues(alpha: active ? 1 : 0.7)
-      ..strokeWidth = active ? 3 : 2
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(
-      Path()
-        ..moveTo(x0, 0)
-        ..lineTo(x0, y)
-        ..lineTo(left, y),
-      paint,
+    final y = size.height / 2;
+    const head = 6.0;
+    final color = Glass.led.withValues(alpha: active ? 1 : 0.7);
+    canvas.drawLine(
+      Offset(size.width, y),
+      Offset(head, y),
+      Paint()
+        ..color = color
+        ..strokeWidth = active ? 3 : 2,
     );
     canvas.drawPath(
       Path()
-        ..moveTo(-stub, y)
-        ..lineTo(left, y - 4)
-        ..lineTo(left, y + 4)
+        ..moveTo(0, y)
+        ..lineTo(head, y - 4)
+        ..lineTo(head, y + 4)
         ..close(),
-      Paint()..color = paint.color,
+      Paint()..color = color,
     );
   }
 
@@ -415,6 +425,9 @@ class _Module extends StatelessWidget {
   final String note;
   final bool stubOnRight;
 
+  /// Height of the bus stub above the card's bottom edge; null centres it.
+  final double? stubFromBottom;
+
   const _Module({
     required this.name,
     required this.value,
@@ -424,14 +437,16 @@ class _Module extends StatelessWidget {
     this.countText,
     required this.note,
     this.stubOnRight = false,
+    this.stubFromBottom,
   });
 
   @override
   Widget build(BuildContext context) {
     final onBus = role == BusRole.drive || role == BusRole.read;
+    final stubHeight = onBus ? 3.0 : 1.0;
     final stub = Container(
       width: 28,
-      height: onBus ? 3 : 1,
+      height: stubHeight,
       color: switch (role) {
         BusRole.drive => Glass.drive,
         BusRole.read => Glass.read,
@@ -495,6 +510,19 @@ class _Module extends StatelessWidget {
         ),
       ),
     );
+    final from = stubFromBottom;
+    if (from != null) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: from - stubHeight / 2),
+            child: stub,
+          ),
+          panel,
+        ],
+      );
+    }
     return Row(children: stubOnRight ? [panel, stub] : [stub, panel]);
   }
 }
@@ -628,23 +656,30 @@ class _Display extends StatelessWidget {
 
   static const _pink = Color(0xFFFFB3B3);
   static const _rose = Color(0xFFC9A3A3);
+  static const _shell = Color(0xFFFFD9D9);
+
+  /// Most numbers the history lists; two lines hold fewer, and the oldest
+  /// give way to an ellipsis.
+  static const int _kept = 48;
+
+  /// Characters of text kept: the latest end must stay in view, so no more
+  /// than two lines hold even at the narrowest board.
+  static const int _keptText = 20;
 
   @override
   Widget build(BuildContext context) {
     final value = cpu.outputRegister;
-    final char = Glass.char(value);
     final printable =
         outputs.isNotEmpty && outputs.every((v) => Glass.char(v) != null);
     final count = outputs.isEmpty
-        ? 'nothing yet'
-        : '${outputs.length} value${outputs.length == 1 ? '' : 's'}'
-              '${printable ? ' · text' : ''}';
+        ? null
+        : '${outputs.length} value${outputs.length == 1 ? '' : 's'}';
 
     return Semantics(
       label: 'Display: $value',
       liveRegion: true,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
         decoration: BoxDecoration(
           gradient: const RadialGradient(
             center: Alignment.topCenter,
@@ -682,7 +717,11 @@ class _Display extends StatelessWidget {
                   style: TextStyle(fontSize: 11, color: _rose),
                 ),
                 const Spacer(),
-                Text(count, style: const TextStyle(fontSize: 11, color: _rose)),
+                if (count != null)
+                  Text(
+                    count,
+                    style: const TextStyle(fontSize: 11, color: _rose),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -716,138 +755,71 @@ class _Display extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        char ?? '—',
-                        style: const TextStyle(
-                          fontFamily: Glass.mono,
-                          fontSize: 18,
-                          height: 1.2,
-                          color: Color(0xFFFFD9D9),
-                        ),
-                      ),
-                      Text(
-                        Glass.hex2(value),
-                        style: const TextStyle(
-                          fontFamily: Glass.mono,
-                          fontSize: 12,
-                          color: _rose,
-                        ),
-                      ),
-                      Text(
-                        value.toRadixString(2).padLeft(8, '0'),
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
-                        style: const TextStyle(
-                          fontFamily: Glass.mono,
-                          fontSize: 12,
-                          color: _rose,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(width: 14),
+                Expanded(child: _history(printable)),
               ],
-            ),
-            const SizedBox(height: 10),
-            // Past outputs: as many of the latest as fit on one row.
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final chipWidth = printable ? 26.0 : 38.0;
-                const spacing = 5.0;
-                final fit =
-                    ((constraints.maxWidth + spacing) / (chipWidth + spacing))
-                        .floor()
-                        .clamp(1, 64);
-                final truncated = outputs.length > fit;
-                final shown = truncated
-                    ? outputs.sublist(outputs.length - (fit - 1))
-                    : outputs;
-                final chips = <Widget>[
-                  if (truncated)
-                    _OutputChip(text: '…', faded: true, width: chipWidth),
-                  for (int i = 0; i < shown.length; i++)
-                    _OutputChip(
-                      text: printable
-                          ? String.fromCharCode(shown[i])
-                          : '${shown[i]}',
-                      latest: i == shown.length - 1,
-                      width: chipWidth,
-                    ),
-                  if (outputs.isEmpty)
-                    for (int i = 0; i < fit.clamp(1, 4); i++)
-                      _OutputChip(text: '·', faded: true, width: chipWidth),
-                ];
-                return Row(
-                  children: [
-                    for (int i = 0; i < chips.length; i++) ...[
-                      if (i > 0) const SizedBox(width: spacing),
-                      chips[i],
-                    ],
-                  ],
-                );
-              },
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _OutputChip extends StatelessWidget {
-  final String text;
-  final bool latest;
-  final bool faded;
-  final double width;
+  /// Everything output so far, beside the number: text as it was written
+  /// (its latest end kept), numbers newest first.
+  Widget _history(bool printable) {
+    if (outputs.isEmpty) {
+      return const Text(
+        'nothing output yet\nOUT copies A here',
+        style: TextStyle(fontSize: 11, height: 1.5, color: _rose),
+      );
+    }
+    const valueStyle = TextStyle(
+      fontFamily: Glass.mono,
+      fontSize: 14,
+      height: 1.45,
+      color: _shell,
+    );
+    const latestStyle = TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.w700,
+    );
 
-  const _OutputChip({
-    required this.text,
-    this.latest = false,
-    this.faded = false,
-    required this.width,
-  });
+    final InlineSpan values;
+    if (printable) {
+      final cut = outputs.length > _keptText;
+      final tail = cut ? outputs.sublist(outputs.length - _keptText) : outputs;
+      values = TextSpan(
+        children: [
+          if (cut) const TextSpan(text: '…'),
+          TextSpan(text: String.fromCharCodes(tail.take(tail.length - 1))),
+          TextSpan(text: String.fromCharCode(tail.last), style: latestStyle),
+        ],
+      );
+    } else {
+      final newest = outputs.reversed.take(_kept).toList();
+      values = TextSpan(
+        children: [
+          TextSpan(text: '${newest.first}', style: latestStyle),
+          for (final v in newest.skip(1)) TextSpan(text: '  $v'),
+        ],
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: 30,
-      decoration: BoxDecoration(
-        color: faded
-            ? const Color(0xFF170D0D)
-            : latest
-            ? const Color(0xFF2A1414)
-            : const Color(0xFF1E1010),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: latest
-              ? Glass.led
-              : faded
-              ? const Color(0xFF4A2626)
-              : const Color(0xFF3A1E1E),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          printable ? 'as text' : 'newest first',
+          style: const TextStyle(fontSize: 11, color: _rose),
         ),
-      ),
-      child: Center(
-        child: Text(
-          text,
-          maxLines: 1,
-          style: TextStyle(
-            fontFamily: Glass.mono,
-            fontSize: 14,
-            color: faded
-                ? const Color(0xFF5E3A3A)
-                : latest
-                ? Colors.white
-                : const Color(0xFFFFD9D9),
-          ),
+        Text.rich(
+          values,
+          style: valueStyle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
-      ),
+      ],
     );
   }
 }
