@@ -444,14 +444,18 @@ class _FlagsWire extends StatelessWidget {
             color: active ? Glass.count : const Color(0xFF6B7480),
           ),
           const SizedBox(width: 8),
-          Text(
-            active
-                ? 'FI · flags latched from the ALU'
-                : 'FI · flags in, from the ALU result',
-            style: TextStyle(
-              fontFamily: Glass.mono,
-              fontSize: 11,
-              color: active ? Glass.count : const Color(0xFFA8B0BA),
+          Expanded(
+            child: Text(
+              active
+                  ? 'FI · flags latched from the ALU'
+                  : 'FI · flags in, from the ALU result',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: Glass.mono,
+                fontSize: 11,
+                color: active ? Glass.count : const Color(0xFFA8B0BA),
+              ),
             ),
           ),
         ],

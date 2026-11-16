@@ -89,6 +89,19 @@ class CPULayout extends StatelessWidget {
   static double editorWidth(double boardWidth) =>
       (boardWidth * 0.28).clamp(420.0, 560.0);
 
+  static const double _ramWidth = 300;
+
+  /// Width of the I/O devices column, beside the datapath.
+  static const double _devicesWidth = 400;
+
+  /// Centre width from which the devices get their own column (about a
+  /// 1900 px window); below it they stack under the datapath.
+  static const double _devicesColumnFrom = 1000;
+
+  /// Width left for the centre column on a board [boardWidth] wide.
+  static double centreWidth(double boardWidth) =>
+      boardWidth - _ramWidth - editorWidth(boardWidth) - 2 * _gap;
+
   @override
   Widget build(BuildContext context) {
     final info = StepInfo.of(cpu);
@@ -131,7 +144,7 @@ class CPULayout extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(
-                    width: 300,
+                    width: _ramWidth,
                     child: RamPanel(
                       cpu: cpu,
                       assembly: assembly,
@@ -139,33 +152,7 @@ class CPULayout extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: _gap),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Datapath(
-                            cpu: cpu,
-                            info: info,
-                            assembly: assembly,
-                            outputs: outputs,
-                          ),
-                          if (cpu.mode == CpuMode.extended) ...[
-                            const SizedBox(height: _gap),
-                            DevicesPanel(
-                              cpu: cpu,
-                              onKey: onKeypadKey,
-                              hardware: hardware,
-                            ),
-                          ],
-                          if (detailedView) ...[
-                            const SizedBox(height: _gap),
-                            MicrocodePanel(cpu: cpu),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
+                  Expanded(child: _centre(constraints.maxWidth, info)),
                   const SizedBox(width: _gap),
                   SizedBox(
                     width: editorWidth(constraints.maxWidth),
@@ -184,6 +171,52 @@ class CPULayout extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Datapath, devices and microcode. On wide boards the devices move to
+  /// a column of their own, so the LCD, matrix and keypad stay in view.
+  Widget _centre(double boardWidth, StepInfo info) {
+    final extended = cpu.mode == CpuMode.extended;
+    final devicesBeside =
+        extended && centreWidth(boardWidth) >= _devicesColumnFrom;
+    final devices = DevicesPanel(
+      cpu: cpu,
+      onKey: onKeypadKey,
+      hardware: hardware,
+    );
+    final main = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Datapath(
+            cpu: cpu,
+            info: info,
+            assembly: assembly,
+            outputs: outputs,
+          ),
+          if (extended && !devicesBeside) ...[
+            const SizedBox(height: _gap),
+            devices,
+          ],
+          if (detailedView) ...[
+            const SizedBox(height: _gap),
+            MicrocodePanel(cpu: cpu),
+          ],
+        ],
+      ),
+    );
+    if (!devicesBeside) return main;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: main),
+        const SizedBox(width: _gap),
+        SizedBox(
+          width: _devicesWidth,
+          child: SingleChildScrollView(child: devices),
+        ),
+      ],
     );
   }
 }
