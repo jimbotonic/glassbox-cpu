@@ -1,0 +1,23 @@
+# Cloudflare Pages response headers; copied into build/web by flutter build.
+#
+# Flutter's file names carry no content hash, so index.html, main.dart.js
+# and flutter_bootstrap.js keep Pages' default (revalidate every time,
+# cheap thanks to ETags) and a new deploy shows up at once. CanvasKit and
+# the fonts change only with a Flutter upgrade: cache them for a day.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: serial=(self), camera=(), microphone=(), geolocation=()
+
+/canvaskit/*
+  Cache-Control: public, max-age=86400
+
+/assets/*
+  Cache-Control: public, max-age=86400
+
+# For a later `flutter build web --wasm` with multi-threaded rendering,
+# add to /*:
+#   Cross-Origin-Opener-Policy: same-origin
+#   Cross-Origin-Embedder-Policy: require-corp
