@@ -145,13 +145,20 @@ git clone https://github.com/devmuaz/8-bit-cpu-simulator.git
 cd 8-bit-cpu-simulator
 ```
 
-2. Install dependencies:
+2. Install Flutter (skip if `flutter --version` already works). The scripts clone the stable SDK into `~/dev/flutter` (`%USERPROFILE%\dev\flutter` on Windows), add it to your PATH and run `flutter pub get`:
+
+```bash
+bash scripts/install_flutter.sh                  # Linux (add --linux-desktop for flutter run -d linux)
+powershell -ExecutionPolicy Bypass -File scripts\install_flutter.ps1   # Windows
+```
+
+3. Install dependencies:
 
 ```bash
 flutter pub get
 ```
 
-3. Run the application:
+4. Run the application:
 
 ```bash
 flutter run
