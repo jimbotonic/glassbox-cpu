@@ -185,25 +185,36 @@ class CPULayout extends StatelessWidget {
       onKey: onKeypadKey,
       hardware: hardware,
     );
-    final main = SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Datapath(
-            cpu: cpu,
-            info: info,
-            assembly: assembly,
-            outputs: outputs,
+    // At least as tall as the window allows: height to spare goes to the
+    // datapath, whose cards grow a little.
+    final main = LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Datapath(
+                    cpu: cpu,
+                    info: info,
+                    assembly: assembly,
+                    outputs: outputs,
+                  ),
+                ),
+                if (extended && !devicesBeside) ...[
+                  const SizedBox(height: _gap),
+                  devices,
+                ],
+                if (detailedView) ...[
+                  const SizedBox(height: _gap),
+                  MicrocodePanel(cpu: cpu),
+                ],
+              ],
+            ),
           ),
-          if (extended && !devicesBeside) ...[
-            const SizedBox(height: _gap),
-            devices,
-          ],
-          if (detailedView) ...[
-            const SizedBox(height: _gap),
-            MicrocodePanel(cpu: cpu),
-          ],
-        ],
+        ),
       ),
     );
     if (!devicesBeside) return main;

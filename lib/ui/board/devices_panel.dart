@@ -474,6 +474,7 @@ class _KeypadView extends StatelessWidget {
   const _KeypadView({required this.keypad, required this.onKey});
 
   static const double _key = 44;
+  static const double _keyHeight = 32;
   static const double _gap = 6;
 
   @override
@@ -493,7 +494,7 @@ class _KeypadView extends StatelessWidget {
                   width: _key,
                   child: GlassButton(
                     label: key,
-                    height: _key,
+                    height: _keyHeight,
                     tooltip:
                         "Press $key: IN reads ${Glass.hex2(key.codeUnitAt(0))}",
                     fill: key.codeUnitAt(0) == pending ? Glass.busGround : null,

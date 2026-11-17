@@ -9,6 +9,7 @@ import '../../core/opcode.dart';
 import '../../core/step_info.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
+import 'grow_column.dart';
 
 /// The modules around the bus: who drives it (blue), who reads it
 /// (orange), the flags hanging off the ALU, and the display fed by the
@@ -39,6 +40,9 @@ class Datapath extends StatelessWidget {
   /// display leaves, measured up from the register's bottom edge. The bus
   /// line ends at the first, so the wire passes under its end.
   static const double _outBusFromBottom = 42;
+
+  /// Most height a card gains when the board has room to spare.
+  static const double _maxGrow = 14;
   static const double _outWireFromBottom = 17;
 
   bool _on(ControlWord s) => s.isActive(cpu.controlWord);
@@ -187,17 +191,21 @@ class Datapath extends StatelessWidget {
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Module(
-            name: 'ALU · Σ',
-            value: alu.value,
-            role: aluRole,
-            idle: StepInfo.aluLabel(word),
-            note:
-                '${StepInfo.aluLabel(word)} = ${alu.value}'
-                '${alu.carry ? ' · carry out' : ''}',
+          Expanded(
+            child: _Module(
+              name: 'ALU · Σ',
+              value: alu.value,
+              role: aluRole,
+              idle: StepInfo.aluLabel(word),
+              note:
+                  '${StepInfo.aluLabel(word)} = ${alu.value}'
+                  '${alu.carry ? ' · carry out' : ''}',
+            ),
           ),
           _FlagsWire(active: fiActive),
-          _Flags(cpu: cpu, latched: fiActive),
+          Expanded(
+            child: _Flags(cpu: cpu, latched: fiActive),
+          ),
         ],
       ),
       if (extended) _portModule(),
@@ -223,7 +231,7 @@ class Datapath extends StatelessWidget {
         // gaps. The display ends the left column and the output register the
         // right, bottoms level, so the red wire runs straight across from the
         // register's left side, under the end of the bus line, to the display.
-        IntrinsicHeight(
+        Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -315,20 +323,10 @@ class Datapath extends StatelessWidget {
     );
   }
 
-  /// A column whose gaps grow, from [_gap], to fill the height it is given.
-  Widget _spread(List<Widget> children) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      for (int i = 0; i < children.length; i++)
-        i < children.length - 1
-            ? Padding(
-                padding: const EdgeInsets.only(bottom: _gap),
-                child: children[i],
-              )
-            : children[i],
-    ],
-  );
+  /// A column of cards that grow a little, then spread, to fill the height
+  /// the datapath is given.
+  Widget _spread(List<Widget> children) =>
+      GrowColumn(gap: _gap, maxGrow: _maxGrow, children: children);
 }
 
 /// The output register's wire to the display: straight left from the
@@ -462,6 +460,7 @@ class _Module extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -513,17 +512,21 @@ class _Module extends StatelessWidget {
     final from = stubFromBottom;
     if (from != null) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: EdgeInsets.only(bottom: from - stubHeight / 2),
-            child: stub,
+            child: Align(alignment: Alignment.bottomCenter, child: stub),
           ),
           panel,
         ],
       );
     }
-    return Row(children: stubOnRight ? [panel, stub] : [stub, panel]);
+    final centred = Center(child: stub);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: stubOnRight ? [panel, centred] : [centred, panel],
+    );
   }
 }
 
@@ -611,6 +614,7 @@ class _Flags extends StatelessWidget {
         borderColor: latched ? Glass.count : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [
@@ -699,6 +703,7 @@ class _Display extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [

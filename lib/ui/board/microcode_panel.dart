@@ -41,7 +41,7 @@ class MicrocodePanel extends StatelessWidget {
         : 2;
 
     return GlassPanel(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -71,7 +71,14 @@ class MicrocodePanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 for (int t = 0; t < Microcode.maxStepCount(mode); t++)
-                  _stepRow(t, count, current, opcode, mode),
+                  _stepRow(
+                    t,
+                    count,
+                    current,
+                    opcode,
+                    mode,
+                    last: t == Microcode.maxStepCount(mode) - 1,
+                  ),
               ],
             ),
           ),
@@ -84,7 +91,7 @@ class MicrocodePanel extends StatelessWidget {
                 for (final group in signalGroups(mode))
                   if (group.signals.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -126,7 +133,14 @@ class MicrocodePanel extends StatelessWidget {
     );
   }
 
-  Widget _stepRow(int t, int count, int? current, Opcode opcode, CpuMode mode) {
+  Widget _stepRow(
+    int t,
+    int count,
+    int? current,
+    Opcode opcode,
+    CpuMode mode, {
+    required bool last,
+  }) {
     final used = t < count;
     final isCurrent = t == current;
     final stepWord = used
@@ -144,8 +158,8 @@ class MicrocodePanel extends StatelessWidget {
         ? Glass.textSoft
         : const Color(0xFF4A525C);
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      margin: EdgeInsets.only(bottom: last ? 0 : 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isCurrent
             ? const Color(0xFF20283A)
