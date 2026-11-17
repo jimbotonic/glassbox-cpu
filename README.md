@@ -1,169 +1,240 @@
 # GlassBox CPU Simulator
 
-An interactive visual simulator of a simple 8-bit CPU architecture, built entirely with Flutter. This educational tool helps you understand how computers work at the fundamental level by visualizing CPU operations, registers, memory, and the flow of data through the system.
+An interactive, visual simulator of an 8-bit breadboard CPU, built with Flutter. Write a program in assembly, assemble it into RAM, and watch every clock cycle: which control signals are on, what drives the bus, which register latches it, and why.
 
 Live demo: [glassbox.dubuisson.ch](https://glassbox.dubuisson.ch)
 
 ## Preview
 <img width="1455" height="914" alt="GlassBox CPU Simulator" src="https://github.com/user-attachments/assets/3062b563-9934-4d44-aa33-f08776b2b823" />
 
-
 ## Table of Contents
 
-- [GlassBox CPU Simulator](#glassbox-cpu-simulator)
-  - [Preview](#preview)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Features](#features)
-  - [CPU Architecture](#cpu-architecture)
-    - [Registers](#registers)
-    - [Flags](#flags)
-    - [Memory](#memory)
-    - [Bus](#bus)
-  - [Instruction Set](#instruction-set)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-    - [System Requirements](#system-requirements)
-  - [Writing Assembly Programs](#writing-assembly-programs)
-    - [Basic Syntax](#basic-syntax)
-    - [Example Program](#example-program)
-  - [Understanding the Interface](#understanding-the-interface)
-    - [Control Panel](#control-panel)
-    - [Visual Components](#visual-components)
-  - [Technical Details](#technical-details)
-    - [Fetch-Execute Cycle](#fetch-execute-cycle)
-    - [Control Signals](#control-signals)
-    - [Microcode](#microcode)
-  - [Contributing](#contributing)
-  - [License](#license)
-
-## Overview
-
-This simulator implements a simplified yet fully functional 8-bit CPU inspired by classic educational architectures. It provides a visual, step-by-step execution environment where you can write assembly programs, load them into memory, and watch how the CPU processes each instruction.
-
-The simulator is perfect for:
-
-- Computer science students learning about CPU architecture
-- Educators teaching computer organization
-- Hobbyists interested in low-level computing
-- Anyone curious about how processors work
+- [Features](#features)
+- [Languages](#languages)
+- [Two CPUs: Classic and Extended](#two-cpus-classic-and-extended)
+- [CPU Architecture](#cpu-architecture)
+- [Instruction Set](#instruction-set)
+  - [Classic instructions](#classic-instructions)
+  - [Extended instructions](#extended-instructions)
+  - [I/O ports](#io-ports)
+- [Writing Assembly Programs](#writing-assembly-programs)
+- [Built-in Programs](#built-in-programs)
+- [Real Hardware](#real-hardware)
+- [Technical Details](#technical-details)
+- [Getting Started](#getting-started)
+- [License](#license)
 
 ## Features
 
-- **Visual CPU Simulation**: Watch data flow through the bus, registers update in real-time, and control signals activate during execution
-- **Built-in Assembler**: Write programs in assembly language and automatically convert them to machine code
-- **Step-by-Step Execution**: Execute programs one clock cycle at a time or run continuously at variable speeds
-- **16 Bytes of RAM**: Fully editable memory with 4-bit addressing
-- **Multiple Registers**: A, B, Instruction Register, Memory Address Register, Program Counter, Output, and Sum registers
-- **Status Flags**: Carry and Zero flags for conditional operations
-- **Pre-loaded Programs**: Includes example programs like Fibonacci sequence, counters, and arithmetic operations
-- **Interactive Interface**: Dark-themed, modern UI built with Flutter
-- **Cross-Platform**: Runs on Web, Windows, macOS, Linux, iOS, and Android
+**Watching the machine**
+
+- **Datapath view:** the registers, ALU, flags, RAM and output sit around the shared bus. The value on the bus, the component driving it and the one latching it are highlighted at every step.
+- **Narration:** a strip above the board explains the last step in words, for example `PC = 0x00 → bus → MAR`, with its purpose ("fetch: address of the next instruction").
+- **Microcode panel:** shows the control-word steps (T-states) of the current instruction, with the active signals grouped by role (memory, registers, ALU, program counter, stack, I/O).
+- **Simple / Detailed views:** Simple shows the datapath only. Detailed adds the microcode panel and the active signals next to the narration.
+- **Values everywhere:** registers show binary, hex and decimal. The display port keeps a history of its last outputs.
+
+**Controlling execution**
+
+- **Run / pause** with a clock from 0.25 Hz to 1 kHz.
+- **Step** one clock cycle, or one whole instruction.
+- **Step back:** undoes up to 2,000 cycles, including memory, output and device changes.
+- **Run to cursor**, and **breakpoints** set in the editor gutter.
+- **Reset** reloads the assembled program.
+
+**Programming**
+
+- **Built-in assembler** with labels, named constants (`.equ`), data bytes and strings (`.db`), and decimal, hex, binary and character literals. Errors point at the offending line.
+- **Editor** with syntax highlighting. The line being executed is highlighted while the program runs.
+- **Editable RAM:** click any byte to change it. The RAM panel disassembles memory back into instructions and labels.
+- **Built-in programs:** 21 example programs in six categories. Opening one switches to the CPU it needs.
+- **Instruction set reference:** a dialog with every instruction, its operand, effect, flags and an example.
+
+**Devices and hardware** (Extended CPU)
+
+- A **16×2 text LCD** (HD44780 command set, custom characters), an **8×8 LED matrix** and a **4×4 keypad** on I/O ports.
+- **Real hardware bridge:** mirror the ports to a physical LCD, LED matrix, OLED and keypad over USB serial or Wi-Fi.
+
+## Languages
+
+The interface is available in **English**, **French** and **German**. Use the EN / FR / DE switch in the top bar. On a first visit the browser's language is used, and the choice is remembered.
+
+Everything is translated: controls and tooltips, the step narration, panels and devices, program names and descriptions, assembler errors, and the instruction set reference. Instruction mnemonics (`LDA`, `OUT`), signal names (`CO`, `MI`) and the source code of the built-in programs stay as they are, so programs read the same in every language.
+
+## Two CPUs: Classic and Extended
+
+The chip in the editor header switches between two machines. Switching clears RAM.
+
+- **Classic** (the default) is the 8-bit breadboard computer popularised by Ben Eater: 16 bytes of RAM, a 4-bit program counter, and eleven one-byte instructions with the operand in the low nibble.
+- **Extended** keeps the same bus and fetch cycle, widened to 256 bytes of RAM with an 8-bit PC, MAR and stack pointer. Opcodes are a whole byte, followed by an operand byte when the instruction takes one. It adds logic and shift operations, compare, a stack with subroutine calls, indexed loads and I/O ports.
 
 ## CPU Architecture
 
-### Registers
-
-| Register | Size  | Description                                         |
-| -------- | ----- | --------------------------------------------------- |
-| **A**    | 8-bit | General-purpose accumulator register                |
-| **B**    | 8-bit | General-purpose register for arithmetic operations  |
-| **PC**   | 4-bit | Program Counter (0-15)                              |
-| **MAR**  | 4-bit | Memory Address Register                             |
-| **IR**   | 8-bit | Instruction Register (4-bit opcode + 4-bit operand) |
-| **OUT**  | 8-bit | Output Register for displaying results              |
-| **SUM**  | 8-bit | ALU result register                                 |
-
-### Flags
-
-- **Carry Flag (CF)**: Set when arithmetic operations produce a carry or borrow
-- **Zero Flag (ZF)**: Set when the result of an operation is zero
-
-### Memory
-
-- **RAM**: 16 bytes (addresses 0x0 to 0xF)
-- Each memory location stores an 8-bit value (0-255)
-
-### Bus
-
-- **8-bit data bus**: Transfers data between components
-- Visual indication when active during instruction execution
+| Component | Classic | Extended | Description                                                   |
+| --------- | ------- | -------- | ------------------------------------------------------------- |
+| **A**     | 8-bit   | 8-bit    | Accumulator; the ALU's first input and destination            |
+| **B**     | 8-bit   | 8-bit    | The ALU's second input; ALU instructions load it from RAM     |
+| **ALU**   | add/sub | + AND, OR, XOR, shifts | Computes from A and B                          |
+| **Flags** | C, Z    | C, Z     | Carry (carry out, or borrow on subtract) and Zero, latched on `FI` |
+| **PC**    | 4-bit   | 8-bit    | Program counter                                               |
+| **MAR**   | 4-bit   | 8-bit    | Memory address register                                       |
+| **IR**    | 8-bit   | 8-bit    | Instruction register                                          |
+| **SP**    | –       | 8-bit    | Stack pointer; the stack grows down from 0xFF                 |
+| **RAM**   | 16 B    | 256 B    | 8-bit words                                                   |
+| **OUT**   | 8-bit   | 8-bit    | Output register, shown on the display (port 0)                |
+| **Bus**   | 8-bit   | 8-bit    | Shared by all components; one driver per step                 |
 
 ## Instruction Set
 
-The CPU supports 11 instructions with a simple format: 4-bit opcode and 4-bit operand.
+### Classic instructions
 
-| Mnemonic | Opcode | Format     | Description                                   |
-| -------- | ------ | ---------- | --------------------------------------------- |
-| **NOP**  | 0x0    | `NOP`      | No operation                                  |
-| **LDA**  | 0x1    | `LDA addr` | Load value from RAM address into register A   |
-| **ADD**  | 0x2    | `ADD addr` | Add value at RAM address to register A        |
-| **SUB**  | 0x3    | `SUB addr` | Subtract value at RAM address from register A |
-| **STA**  | 0x4    | `STA addr` | Store register A value to RAM address         |
-| **LDI**  | 0x5    | `LDI #val` | Load immediate value into register A          |
-| **JMP**  | 0x6    | `JMP addr` | Jump to address                               |
-| **JC**   | 0x7    | `JC addr`  | Jump to address if Carry flag is set          |
-| **JZ**   | 0x8    | `JZ addr`  | Jump to address if Zero flag is set           |
-| **OUT**  | 0xE    | `OUT`      | Copy register A to output register            |
-| **HLT**  | 0xF    | `HLT`      | Halt program execution                        |
+One byte each: the 4-bit opcode in the high nibble, the 4-bit operand (address or value, 0–15) in the low nibble. All of them also exist in Extended mode, with the same number (`LDA` is 0x1 in Classic and 0x01 in Extended).
 
-### Extended CPU
+| Mnemonic | Opcode | Format     | Effect                                   | Flags |
+| -------- | ------ | ---------- | ---------------------------------------- | ----- |
+| **NOP**  | 0x0    | `NOP`      | No operation                             |       |
+| **LDA**  | 0x1    | `LDA addr` | A = RAM[addr]                            |       |
+| **ADD**  | 0x2    | `ADD addr` | A = A + RAM[addr]                        | C, Z  |
+| **SUB**  | 0x3    | `SUB addr` | A = A − RAM[addr]; C is set on a borrow  | C, Z  |
+| **STA**  | 0x4    | `STA addr` | RAM[addr] = A                            |       |
+| **LDI**  | 0x5    | `LDI #val` | A = val                                  |       |
+| **JMP**  | 0x6    | `JMP addr` | Jump to addr                             |       |
+| **JC**   | 0x7    | `JC addr`  | Jump if carry is set                     |       |
+| **JZ**   | 0x8    | `JZ addr`  | Jump if zero is set                      |       |
+| **OUT**  | 0xE    | `OUT`      | Output register = A                      |       |
+| **HLT**  | 0xF    | `HLT`      | Stop the clock                           |       |
 
-The chip in the editor header switches between **Classic** (the machine above, the default) and **Extended**. Switching clears RAM.
+### Extended instructions
 
-The Extended CPU keeps the same bus and fetch cycle, widened to 256 bytes of RAM with 8-bit PC, MAR and stack pointer. The opcode is a whole byte. An instruction that takes an address or value is followed by an operand byte, which the CPU reads at the program counter (`CO|MI`, then `RO|..|CE`). Immediates range from -128 to 255. The eleven Classic instructions keep their numbers (0x00–0x0F); these are added:
+Added in Extended mode. Addresses and values are a full byte; immediates range from −128 to 255.
 
-| Mnemonic          | Opcode      | Format      | Description                                              |
-| ----------------- | ----------- | ----------- | -------------------------------------------------------- |
-| **JNC** / **JNZ** | 0x09 / 0x0A | `JNZ addr`  | Jump if Carry / Zero is clear                            |
-| **LDB**           | 0x0B        | `LDB addr`  | Load value from RAM address into register B              |
-| **ADI** / **SBI** | 0x0C / 0x0D | `ADI #val`  | A = A ± value                                            |
-| **AND**, **OR**, **XOR** | 0x10–0x12 | `AND addr` | Bitwise A op RAM[addr]; clears carry               |
-| **CMP**           | 0x13        | `CMP addr`  | Flags from A − RAM[addr]; A unchanged                    |
-| **SHL** / **SHR** | 0x14 / 0x15 | `SHL`       | Shift A one bit; the bit shifted out goes into carry     |
-| **PUSH** / **POP**| 0x20 / 0x21 | `PUSH`      | Save / restore A on the stack (grows down from 0xFF)     |
-| **CALL**          | 0x22        | `CALL addr` | Push PC (its operand's address) and jump                 |
-| **RET**           | 0x23        | `RET`       | Pop PC and step past the CALL's operand                  |
-| **LDA [B]**       | 0x30        | `LDA [B]`   | Load from the address held in B (arrays, strings)        |
-| **OUT port**      | 0x18        | `OUT 2`     | Write A to the device on a port                          |
-| **IN port**       | 0x19        | `IN 5`      | Read the device on a port into A (sets no flags)         |
+| Mnemonic                 | Opcode      | Format      | Effect                                                   | Flags |
+| ------------------------ | ----------- | ----------- | -------------------------------------------------------- | ----- |
+| **JNC** / **JNZ**        | 0x09 / 0x0A | `JNZ addr`  | Jump if carry / zero is clear                            |       |
+| **LDB**                  | 0x0B        | `LDB addr`  | B = RAM[addr]                                            |       |
+| **ADI** / **SBI**        | 0x0C / 0x0D | `ADI #val`  | A = A ± val                                              | C, Z  |
+| **AND** / **OR** / **XOR** | 0x10–0x12 | `AND addr`  | A = A op RAM[addr]; clears carry                         | C, Z  |
+| **CMP**                  | 0x13        | `CMP addr`  | Flags from A − RAM[addr]; A unchanged (C = 1 when A is smaller) | C, Z |
+| **SHL** / **SHR**        | 0x14 / 0x15 | `SHL`       | Shift A one bit; the bit shifted out goes into carry     | C, Z  |
+| **OUT port**             | 0x18        | `OUT 2`     | Write A to the device on a port                          |       |
+| **IN port**              | 0x19        | `IN 5`      | A = value read from the device on a port                 |       |
+| **PUSH** / **POP**       | 0x20 / 0x21 | `PUSH`      | Save / restore A on the stack                            |       |
+| **CALL**                 | 0x22        | `CALL addr` | Push the return address and jump                         |       |
+| **RET**                  | 0x23        | `RET`       | Return from the subroutine                               |       |
+| **LDA [B]**              | 0x30        | `LDA [B]`   | A = RAM[B] (arrays, strings)                             |       |
 
-The ALU always works on A and B, so ALU instructions overwrite B. The Extended control word adds twelve signals: BO, SPO, SP+, SP−, the ALU selects AN, OR, XR, SL, SR, and the I/O signals PI, DI, DO. The *Extended CPU* built-in programs show each feature.
+The ALU always works on A and B, so ADD, SUB, AND, OR, XOR, CMP, ADI and SBI overwrite B.
 
-#### I/O ports
+### I/O ports
 
-`OUT port` latches its operand into the port register (`RO|PI|CE`), then A drives the bus and the device on that port reads it (`AO|DI`). `IN port` has the device drive the bus into A (`DO|AI`). Plain `OUT` is port 0, so Classic programs behave as before. The devices are drawn under the datapath in Extended mode, and step-back undoes their changes too.
+`OUT port` latches the port number into the port register, then A drives the bus and the device on that port reads it. `IN port` has the device drive the bus into A. Plain `OUT` is port 0, so Classic programs behave the same in Extended mode. An unconnected port reads 0.
 
-| Port | Device                     | Direction | Use                                                                    |
-| ---- | -------------------------- | --------- | ---------------------------------------------------------------------- |
-| 0    | Display (output register)  | out       | Plain `OUT` or `OUT 0`                                                 |
-| 1    | Text LCD 16×2: command     | out       | HD44780 instructions: `0x38` 2 lines, `0x0C` display on, `0x01` clear, `0x80+addr` cursor (line 2 at `0x40`), `0x40+addr` custom characters. `IN 1` reads the cursor address |
-| 2    | Text LCD 16×2: data        | out       | A character at the cursor, which then moves on                         |
-| 3    | LED matrix 8×8: row        | out       | Selects the row (0–7) for the next data byte                           |
-| 4    | LED matrix 8×8: data       | out       | The row's LEDs, bit 7 on the left; the next row is selected after it   |
-| 5    | Keypad 4×4                 | in        | ASCII of the last key pressed (`0`–`9`, `A`–`D`, `*`, `#`), read once; 0 if none |
+| Port | Device                    | Direction | Use                                                                    |
+| ---- | ------------------------- | --------- | ---------------------------------------------------------------------- |
+| 0    | Display (output register) | out       | Plain `OUT` or `OUT 0`                                                 |
+| 1    | Text LCD 16×2: command    | out       | HD44780 instructions: `0x38` 2 lines, `0x0C` display on, `0x01` clear, `0x80+addr` cursor (line 2 at `0x40`), `0x40+addr` custom characters. `IN 1` reads the cursor address |
+| 2    | Text LCD 16×2: data       | out       | A character at the cursor, which then moves on                         |
+| 3    | LED matrix 8×8: row       | out       | Selects the row (0–7) for the next data byte                           |
+| 4    | LED matrix 8×8: data      | out       | The row's LEDs, bit 7 on the left; the next row is selected after it   |
+| 5    | Keypad 4×4                | in        | ASCII of the last key pressed (`0`–`9`, `A`–`D`, `*`, `#`), read once; 0 if none |
 
-Like the real HD44780, the LCD starts with its display off: send `0x38` and `0x0C` first. An unconnected port reads 0. The *I/O devices* built-in programs drive each device.
+Like the real HD44780, the LCD starts with its display off: send `0x38` and `0x0C` first.
 
-#### Real hardware
+## Writing Assembly Programs
 
-The *Real hardware* button in the I/O devices panel mirrors the ports to a real LCD, LED matrix, OLED and keypad, over USB serial or Wi-Fi. Firmware is included for Arduino Uno/Nano/Mega, ESP32, Raspberry Pi Pico (`firmware/arduino`) and Raspberry Pi (`firmware/raspberry-pi`). Wiring, setup and the protocol are in [docs/hardware-bridge.md](docs/hardware-bridge.md).
+Each line is `[label:] [instruction | directive] [; comment]`.
+
+- **Operands** may be decimal, hex (`0x1F`), binary (`0b1010`), a character (`'A'`), or a label or constant name. A leading `#` is optional.
+- **Labels** (`loop:`) name the address of the next instruction or data byte.
+- **`.equ NAME value`** defines a named constant.
+- **`.db`** places data bytes: values, labels, strings (`"Hello"`) or characters.
+- Names are not case-sensitive.
+
+```assembly
+; Labels replace raw addresses
+.equ START 10 ; Named constant
+
+loop:  LDA count   ; Load counter
+       OUT         ; Show it
+       SUB one     ; Subtract 1
+       STA count   ; Store back
+       JZ  done    ; Stop at 0
+       JMP loop    ; Repeat
+done:  HLT         ; Halt
+
+count: .db START   ; Counter byte
+one:   .db 1       ; Constant 1
+```
+
+## Built-in Programs
+
+| Category       | Programs                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| Beginner       | Counter (0–255), Binary Blinker                                                                   |
+| Arithmetic     | Fibonacci Sequence, Powers of 2, Triangle Numbers, Square Numbers, Multiplication (7 × 3)         |
+| Control Flow   | Countdown from 10, Countdown (labels & data)                                                      |
+| Patterns       | Even Numbers, Multiples of 5, Alternating Pattern                                                 |
+| Extended CPU   | Countdown (immediates & JNZ), Hello (string with LDA [B]), Stack reverse (PUSH / POP), Multiply (CALL, shifts, AND), Bouncing bit (SHL / SHR) |
+| I/O devices    | LCD: Hello, world · LCD: custom character · LED matrix: smiley · Keypad echo                      |
+
+## Real Hardware
+
+The *Real hardware* button in the I/O devices panel mirrors the ports to a real LCD, LED matrix, OLED and keypad, over USB serial or Wi-Fi. Firmware is included for Arduino Uno/Nano/Mega, ESP32 and Raspberry Pi Pico (`firmware/arduino`), and for Raspberry Pi (`firmware/raspberry-pi`). Wiring, setup and the protocol are described in [docs/hardware-bridge.md](docs/hardware-bridge.md).
+
+## Technical Details
+
+### Fetch-execute cycle
+
+Every instruction starts with the same two fetch steps, then runs its own execute steps:
+
+1. **T0:** `CO|MI` — PC → MAR.
+2. **T1:** `RO|II|CE` — RAM[MAR] → IR, then PC + 1.
+3. **T2 onwards:** the instruction's own steps. An instruction with nothing to do still spends one empty step, so NOP, HLT and an untaken Classic jump take three cycles.
+
+In Extended mode the operand is the byte after the opcode, so an execute step reads it at the program counter and moves past it (`CO|MI`, then `RO|..|CE`).
+
+### Control signals
+
+| Signal | Meaning                    | Signal | Meaning                         |
+| ------ | -------------------------- | ------ | ------------------------------- |
+| HLT    | Halt the clock             | SU     | ALU subtracts                   |
+| MI     | Memory address in          | OI     | Output register in              |
+| RI     | RAM in (write)             | CE     | Counter enable (PC + 1)         |
+| RO     | RAM out (read)             | CO     | Counter out                     |
+| IO     | Instruction operand out    | J      | Jump (load PC)                  |
+| II     | Instruction register in    | FI     | Flags in                        |
+| AI     | A in                       | AO     | A out                           |
+| BI     | B in                       | SO     | ALU (sum) out                   |
+
+Extended mode adds twelve signals: **BO** (B out), **SPO** (stack pointer out), **SP+** / **SP−** (stack pointer up / down), the ALU selects **AN**, **OR**, **XR**, **SL**, **SR**, and the I/O signals **PI** (port register in), **DI** (device in) and **DO** (device out).
+
+### Microcode
+
+Each instruction is a list of control words, one per step: what the EEPROMs hold in the breadboard computer. For example:
+
+```
+ADD addr (Classic)            CALL addr (Extended)
+  T0: CO|MI                     T0: CO|MI
+  T1: RO|II|CE                  T1: RO|II|CE
+  T2: IO|MI                     T2: SPO|MI       ; SP → MAR
+  T3: RO|BI                     T3: CO|RI|SP−    ; save PC, SP − 1
+  T4: SO|AI|FI                  T4: CO|MI        ; operand address → MAR
+                                T5: RO|J         ; jump to operand
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Flutter SDK (version 3.9.0 or higher)
-- A code editor (VS Code, Android Studio, or any text editor)
+- Flutter SDK with Dart 3.10 or later (developed with Flutter 3.50)
 
 ### Installation
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/devmuaz/8-bit-cpu-simulator.git
-cd 8-bit-cpu-simulator
+git clone https://github.com/jimbotonic/glassbox-cpu.git
+cd glassbox-cpu
 ```
 
 2. Install Flutter (skip if `flutter --version` already works). The scripts clone the stable SDK into `~/dev/flutter` (`%USERPROFILE%\dev\flutter` on Windows), add it to your PATH and run `flutter pub get`:
@@ -173,132 +244,22 @@ bash scripts/install_flutter.sh                  # Linux (add --linux-desktop fo
 powershell -ExecutionPolicy Bypass -File scripts\install_flutter.ps1   # Windows
 ```
 
-3. Install dependencies:
+3. Install dependencies and run:
 
 ```bash
 flutter pub get
+flutter run -d chrome
 ```
 
-4. Run the application:
+To build the web version: `flutter build web --release` (output in `build/web`). Run the tests with `flutter test`.
 
-```bash
-flutter run
-```
+### Screen size
 
-### System Requirements
-
-The simulator requires a minimum screen size of 1400px width and 900px height for optimal viewing. Please run in full-screen mode for the best experience.
-
-## Writing Assembly Programs
-
-### Basic Syntax
-
-- One instruction per line
-- Comments start with semicolon (`;`)
-- Addresses and values can be in decimal or hexadecimal (prefix with `0x`)
-- Immediate values are prefixed with `#`
-
-### Example Program
-
-```assembly
-; Simple counter from 0 to 255
-LDI #0       ; Initialize counter to 0
-STA 0xF      ; Store in RAM at address 15
-LDI #1       ; Load increment value
-STA 0xE      ; Store increment at address 14
-LDA 0xF      ; Load current counter value
-OUT          ; Display current value
-ADD 0xE      ; Add 1 to counter
-STA 0xF      ; Store new value
-JZ 0xA       ; If zero, jump to halt
-JMP 0x4      ; Otherwise, loop back
-HLT          ; Program end
-```
-
-## Understanding the Interface
-
-### Control Panel
-
-- **Clock Toggle**: Start/stop program execution
-- **Single Step**: Execute one clock cycle at a time
-- **Clock Speed**: Adjust execution speed (1x to 50x)
-- **Reset**: Reset all registers and reload the program
-- **Manual Mode**: Switch between automatic and manual stepping
-
-### Visual Components
-
-1. **Bus Visualization**: Shows when data is being transferred and what value is on the bus
-2. **Register Displays**: Real-time values of all registers in binary, hexadecimal, and decimal
-3. **Memory View**: Complete view of all 16 RAM locations
-4. **Control Signals**: Visual indicators showing which control signals are active
-5. **Flags Display**: Current state of Carry and Zero flags
-6. **Output Display**: Shows the current output value
-7. **Assembly Editor**: Write and edit assembly programs
-8. **Machine Code View**: See the assembled machine code
-
-## Technical Details
-
-### Fetch-Execute Cycle
-
-The CPU follows a standard fetch-execute cycle:
-
-1. **T0 (Fetch Address)**:
-
-   - PC → MAR (Counter Out, Memory In)
-   - Load program counter into memory address register
-
-2. **T1 (Fetch Instruction)**:
-
-   - RAM[MAR] → IR (RAM Out, Instruction In)
-   - PC++ (Counter Enable)
-   - Load instruction from memory, increment program counter
-
-3. **T2+ (Execute)**:
-   - Varies by instruction
-   - Can take 1-3 additional clock cycles
-
-### Control Signals
-
-The CPU uses the following control signals to orchestrate data flow:
-
-- **MI**: Memory Address In
-- **RI**: RAM In
-- **RO**: RAM Out
-- **IO**: Instruction Out (operand)
-- **II**: Instruction In
-- **AI**: A Register In
-- **AO**: A Register Out
-- **BI**: B Register In
-- **SO**: Sum Out (ALU output)
-- **SU**: Subtract (ALU mode)
-- **OI**: Output In
-- **CE**: Counter Enable (PC++)
-- **CO**: Counter Out
-- **J**: Jump (load PC)
-- **FI**: Flags In
-
-### Microcode
-
-Each instruction is broken down into microcode steps. For example, the ADD instruction:
-
-```
-ADD addr:
-  T0: CO|MI       ; PC to MAR
-  T1: RO|II|CE    ; RAM to IR, increment PC
-  T2: IO|MI       ; Operand to MAR
-  T3: RO|BI       ; RAM to B register
-  T4: SO|AI|FI    ; A+B to A, update flags
-```
+The board needs a window of at least 1340 × 640 px. The Extended CPU's devices get their own column from about 1900 px wide; below that they sit under the datapath.
 
 ## Contributing
 
-Contributions are welcome! Whether it's bug reports, feature requests, or code contributions, please feel free to get involved.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Bug reports, feature requests and pull requests are welcome.
 
 ## License
 
@@ -307,4 +268,3 @@ GlassBox CPU is licensed under the GNU General Public License v3.0 — see [LICE
 It is based on [8-bit CPU Simulator](https://github.com/devmuaz/8bit-CPU-Simulator) by [devmuaz](https://devmuaz.com),
 released under the MIT License — see [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
 Inspired by [Ben Eater](https://eater.net)'s 8-bit breadboard computer.
-
