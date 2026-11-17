@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/builtin_program_list.dart';
 import '../../core/cpu_mode.dart';
+import '../../l10n/editor_strings.dart';
 import '../board/glass_widgets.dart';
 import '../theme/glass.dart';
 
@@ -24,11 +25,10 @@ class BuiltinProgramBrowserDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = tEditor;
     return GlassDialogFrame(
-      title: 'BUILT-IN PROGRAMS',
-      note:
-          'Opens a program in the editor. A program for the other CPU '
-          'switches the machine.',
+      title: t.browserTitle,
+      note: t.browserNote,
       width: 520,
       maxHeight: 640,
       body: Column(
@@ -36,7 +36,7 @@ class BuiltinProgramBrowserDialog extends StatelessWidget {
         children: [
           for (final category in categories) ...[
             if (category != categories.first) const SizedBox(height: 10),
-            GlassSectionTitle(category.name),
+            GlassSectionTitle(category.label),
             for (final program in programs.where((p) => p.category == category))
               _ProgramTile(
                 program: program,
@@ -120,7 +120,7 @@ class _ProgramTile extends StatelessWidget {
                         color: Glass.busGround,
                       ),
                       child: Text(
-                        'switches to ${program.mode.label}',
+                        tEditor.switchesTo(program.mode),
                         style: const TextStyle(fontSize: 11, color: Glass.bus),
                       ),
                     ),

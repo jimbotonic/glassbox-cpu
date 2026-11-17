@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/assembler.dart';
 import '../../core/builtin_program_list.dart';
 import '../../core/cpu_mode.dart';
+import '../../l10n/editor_strings.dart';
 import '../board/glass_widgets.dart';
 import '../theme/glass.dart';
 import 'assembly_text_editing_controller.dart';
@@ -56,7 +57,9 @@ class _ProgramEditorState extends State<ProgramEditor> {
   static const _programs = BuiltinProgramList.all;
   static final _categories = BuiltinProgramList.getCategories();
 
-  late final TextEditingController _errorMessageController;
+  /// Message in the hint box, written in the current language each build
+  /// so a language switch translates it.
+  String Function(EditorStrings t) _log = (t) => t.startHint;
   late final AssemblyTextEditingController _editorController;
 
   late final ScrollController _scrollController;
@@ -255,9 +258,6 @@ class _ProgramEditorState extends State<ProgramEditor> {
       text: widget.initialProgram ?? '',
     );
     _editorController.addListener(_reportCursor);
-    _errorMessageController = TextEditingController(
-      text: 'Write a program or open a built-in one, then assemble.',
-    );
     _scrollController = ScrollController();
     _lineNumberScrollController = ScrollController();
     _scrollController.addListener(_syncLineNumberScroll);
@@ -278,9 +278,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
         _assembly = null;
         _errorLine = null;
       });
-      _errorMessageController.text =
-          '${widget.mode.label} CPU: ${widget.mode.description}. '
-          'RAM cleared: assemble again.';
+      final mode = widget.mode;
+      _log = (t) => t.modeSwitched(mode);
       _setLogTypeNormal();
       // The board is mid-build here: tell it about breakpoints afterwards.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -327,7 +326,6 @@ class _ProgramEditorState extends State<ProgramEditor> {
   @override
   void dispose() {
     _editorController.dispose();
-    _errorMessageController.dispose();
     _scrollController.dispose();
     _lineNumberScrollController.dispose();
     _horizontalScrollController.dispose();
@@ -345,9 +343,8 @@ class _ProgramEditorState extends State<ProgramEditor> {
         _assembly = assembly;
         _errorLine = null;
       });
-      _errorMessageController.text =
-          'Assembled for ${widget.mode.label}: ${program.length} of '
-          '${widget.mode.ramSize} bytes, loaded into RAM.';
+      final mode = widget.mode;
+      _log = (t) => t.assembledFor(mode, program.length, mode.ramSize);
       _setLogTypeInfo();
       widget.onAssemble(assembly);
       _reportBreakpoints();
@@ -358,7 +355,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
         final line = e is AssemblerError ? e.line : null;
         _errorLine = line == null ? null : line - 1;
       });
-      _errorMessageController.text = e.toString();
+      _log = (_) => e.toString();
       _setLogTypeError();
       widget.onAssemble(null);
       _reportBreakpoints();
@@ -385,9 +382,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
           _editorController.text = program.code;
           _updateLineCount();
           _reportBreakpoints();
-          _errorMessageController.text =
-              'Opened for the ${program.mode.label} CPU. '
-              'Assemble & load to put it in RAM.';
+          _log = (t) => t.openedFor(program.mode);
           _setLogTypeNormal();
         },
       ),
@@ -425,8 +420,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
         });
         _reportBreakpoints();
         _reportCursor();
-        _errorMessageController.text =
-            'Program modified. Assemble again to load it.';
+        _log = (t) => t.programModified;
         _setLogTypeNormal();
       },
     ),
@@ -434,33 +428,24 @@ class _ProgramEditorState extends State<ProgramEditor> {
 
   @override
   Widget build(BuildContext context) {
-    const hintText =
-        'Enter assembly code here...\n\n'
-        'Example:\n'
-        '.equ STEP 1     ; named constant\n'
-        'loop: LDA n     ; label\n'
-        '      OUT\n'
-        '      SUB step\n'
-        '      STA n\n'
-        '      JZ  done\n'
-        '      JMP loop\n'
-        'done: HLT\n'
-        'n:    .db 5     ; data byte\n'
-        'step: .db STEP';
+    final t = tEditor;
+    final hintText = t.placeholder;
 
     final highlightedLine = _highlightedLine;
     // Picked up by buildTextSpan when the TextField below rebuilds.
     _editorController.highlightedLine = highlightedLine;
 
     final status = _isLogTypeError
-        ? ('error', Glass.led)
+        ? (t.statusError, Glass.led)
         : isAssembled
         ? (
-            'assembled · ${_assembly?.machineCode.length ?? 0} of '
-                '${widget.mode.ramSize} bytes',
+            t.statusAssembled(
+              _assembly?.machineCode.length ?? 0,
+              widget.mode.ramSize,
+            ),
             Glass.okText,
           )
-        : ('not assembled', Glass.muted);
+        : (t.statusNotAssembled, Glass.muted);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -482,7 +467,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              const Expanded(child: Text('PROGRAM', style: Glass.panelTitle)),
+              Expanded(child: Text(t.programTitle, style: Glass.panelTitle)),
               Text(status.$1, style: TextStyle(fontSize: 12, color: status.$2)),
             ],
           ),
@@ -524,7 +509,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _toggleBreakpoint(index),
                               child: Tooltip(
-                                message: 'Toggle breakpoint',
+                                message: t.toggleBreakpoint,
                                 waitDuration: const Duration(seconds: 1),
                                 child: Row(
                                   children: [
@@ -595,7 +580,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
           ),
           const SizedBox(height: 10),
           GlassButton(
-            label: 'Assemble & load',
+            label: t.assembleAndLoad,
             height: 44,
             fill: Glass.ok,
             foreground: const Color(0xFF04140C),
@@ -606,7 +591,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
             children: [
               Expanded(
                 child: GlassButton(
-                  label: 'Built-in programs',
+                  label: t.builtinPrograms,
                   icon: FluentIcons.folder_open_24_regular,
                   onPressed: _openProgramBrowserDialog,
                 ),
@@ -614,7 +599,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
               const SizedBox(width: 8),
               Expanded(
                 child: GlassButton(
-                  label: 'Instruction set',
+                  label: t.instructionSet,
                   icon: FluentIcons.book_24_regular,
                   onPressed: _openInstructionSetDialog,
                 ),
@@ -624,23 +609,22 @@ class _ProgramEditorState extends State<ProgramEditor> {
           const SizedBox(height: 10),
           Semantics(
             liveRegion: true,
-            label: 'Assembler log',
+            label: t.assemblerLog,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Glass.ground,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _errorMessageController,
-                builder: (context, value, _) {
+              child: Builder(
+                builder: (context) {
                   final focus = _focusLine;
                   final comment = _isLogTypeError || focus == null
                       ? null
                       : commentForLine(_editorController.text, focus);
                   if (comment != null) return _commentHint(focus!, comment);
                   return Text(
-                    value.text,
+                    _log(t),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -668,7 +652,7 @@ class _ProgramEditorState extends State<ProgramEditor> {
     TextSpan(
       children: [
         TextSpan(
-          text: 'line ${line + 1}  ',
+          text: '${tEditor.lineLabel(line + 1)}  ',
           style: const TextStyle(
             color: Glass.faint,
             fontStyle: FontStyle.normal,

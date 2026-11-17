@@ -1,20 +1,46 @@
+import '../l10n/editor_strings.dart';
 import 'cpu_mode.dart';
 
 enum BuiltinProgramCategory {
-  beginner('Beginner'),
-  arithmetic('Arithmetic'),
-  controlFlow('Control Flow'),
-  patterns('Patterns'),
-  extended('Extended CPU'),
-  devices('I/O devices');
+  beginner,
+  arithmetic,
+  controlFlow,
+  patterns,
+  extended,
+  devices;
 
-  final String name;
-  const BuiltinProgramCategory(this.name);
+  /// Heading in the current language.
+  String get label => tEditor.categoryName(this);
+}
+
+/// Identifies a built-in program; its name and description, in each
+/// language, are in `lib/l10n/editor_strings.dart`.
+enum BuiltinProgramId {
+  counter,
+  binaryBlinker,
+  fibonacci,
+  powersOf2,
+  triangleNumbers,
+  squareNumbers,
+  multiplication,
+  countdown,
+  countdownLabels,
+  evenNumbers,
+  multiplesOf5,
+  alternating,
+  countdownImmediates,
+  hello,
+  stackReverse,
+  multiply,
+  bouncingBit,
+  lcdHello,
+  lcdCustomChar,
+  ledSmiley,
+  keypadEcho,
 }
 
 class BuiltinProgram {
-  final String name;
-  final String description;
+  final BuiltinProgramId id;
   final String code;
   final BuiltinProgramCategory category;
 
@@ -22,19 +48,26 @@ class BuiltinProgram {
   final CpuMode mode;
 
   const BuiltinProgram({
-    required this.name,
-    required this.description,
+    required this.id,
     required this.code,
     required this.category,
     this.mode = CpuMode.classic,
   });
+
+  /// Name in the current language.
+  String get name => tEditor.programName(id);
+
+  /// Description in the current language.
+  String get description => tEditor.programDescription(id);
+
+  /// English name, the same in every language.
+  String get englishName => englishEditorStrings.programName(id);
 }
 
 class BuiltinProgramList {
   static const List<BuiltinProgram> beginnerPrograms = [
     BuiltinProgram(
-      name: 'Counter (0-255)',
-      description: 'Counts from 0 to 255 continuously',
+      id: BuiltinProgramId.counter,
       category: BuiltinProgramCategory.beginner,
       code: '''LDI #0       ; Start at 0
 STA 0xF      ; Store in RAM
@@ -50,8 +83,7 @@ HLT          ; Halt''',
     ),
 
     BuiltinProgram(
-      name: 'Binary Blinker',
-      description: 'Alternates between 0 and 1 continuously',
+      id: BuiltinProgramId.binaryBlinker,
       category: BuiltinProgramCategory.beginner,
       code: '''LDI #0       ; Load 0
 OUT          ; Output
@@ -63,8 +95,7 @@ JMP 0x0      ; Loop''',
 
   static const List<BuiltinProgram> arithmeticPrograms = [
     BuiltinProgram(
-      name: 'Fibonacci Sequence',
-      description: 'Generates Fibonacci numbers: 0, 1, 1, 2, 3, 5, 8, 13...',
+      id: BuiltinProgramId.fibonacci,
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #0       ; a = 0
 STA 0xE      ; Store a
@@ -82,8 +113,7 @@ JMP 0x4      ; Loop''',
     ),
 
     BuiltinProgram(
-      name: 'Powers of 2',
-      description: 'Generates powers of 2: 1, 2, 4, 8, 16, 32, 64, 128...',
+      id: BuiltinProgramId.powersOf2,
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #1       ; Start with 1
 STA 0xF      ; Store
@@ -97,8 +127,7 @@ HLT          ; Halt''',
     ),
 
     BuiltinProgram(
-      name: 'Triangle Numbers',
-      description: 'Generates triangle numbers: 1, 3, 6, 10, 15, 21, 28...',
+      id: BuiltinProgramId.triangleNumbers,
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #1       ; Load 1
 STA 0xD      ; Store inc
@@ -116,8 +145,7 @@ JMP 0x5      ; Loop''',
     ),
 
     BuiltinProgram(
-      name: 'Square Numbers',
-      description: 'Generates squares: 1, 4, 9, 16, 25, 36, 49, 64...',
+      id: BuiltinProgramId.squareNumbers,
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #2       ; inc = 2
 STA 0xD      ; Store at 0xD
@@ -135,8 +163,7 @@ JMP 0x5      ; Loop to addr 5''',
     ),
 
     BuiltinProgram(
-      name: 'Multiplication (7 × 3)',
-      description: 'Multiplies 7 by 3 using repeated addition, outputs 21',
+      id: BuiltinProgramId.multiplication,
       category: BuiltinProgramCategory.arithmetic,
       code: '''LDI #7       ; Load 7
 STA 0xF      ; Store at 0xF
@@ -149,8 +176,7 @@ HLT          ; Halt''',
 
   static const List<BuiltinProgram> controlFlowPrograms = [
     BuiltinProgram(
-      name: 'Countdown from 10',
-      description: 'Counts down from 10 to 0 and halts',
+      id: BuiltinProgramId.countdown,
       category: BuiltinProgramCategory.controlFlow,
       code: '''LDI #10      ; Start at 10
 STA 0xF      ; Store
@@ -166,10 +192,7 @@ HLT          ; Halt''',
     ),
 
     BuiltinProgram(
-      name: 'Countdown (labels & data)',
-      description:
-          'The countdown again, with labels, a constant and data bytes '
-          'instead of raw addresses',
+      id: BuiltinProgramId.countdownLabels,
       category: BuiltinProgramCategory.controlFlow,
       code: '''; Labels replace raw addresses
 .equ START 10 ; Named constant
@@ -189,8 +212,7 @@ one:   .db 1       ; Constant 1''',
 
   static const List<BuiltinProgram> patternsPrograms = [
     BuiltinProgram(
-      name: 'Even Numbers',
-      description: 'Outputs even numbers: 0, 2, 4, 6, 8, 10...',
+      id: BuiltinProgramId.evenNumbers,
       category: BuiltinProgramCategory.patterns,
       code: '''LDI #0       ; Start at 0
 STA 0xF      ; Store
@@ -206,8 +228,7 @@ HLT          ; Halt''',
     ),
 
     BuiltinProgram(
-      name: 'Multiples of 5',
-      description: 'Outputs multiples of 5: 0, 5, 10, 15, 20, 25...',
+      id: BuiltinProgramId.multiplesOf5,
       category: BuiltinProgramCategory.patterns,
       code: '''LDI #0       ; Start at 0
 STA 0xF      ; Store
@@ -223,8 +244,7 @@ HLT          ; Halt''',
     ),
 
     BuiltinProgram(
-      name: 'Alternating Pattern',
-      description: 'Alternates between 10 and 20',
+      id: BuiltinProgramId.alternating,
       category: BuiltinProgramCategory.patterns,
       code: '''LDI #10      ; Load 10
 OUT          ; Output
@@ -236,10 +256,7 @@ JMP 0x0      ; Loop''',
 
   static const List<BuiltinProgram> extendedPrograms = [
     BuiltinProgram(
-      name: 'Countdown (immediates & JNZ)',
-      description:
-          'Counts down from 10 with SBI and JNZ: no data bytes needed. '
-          'Extended CPU',
+      id: BuiltinProgramId.countdownImmediates,
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
       code: '''; Extended CPU: 8-bit immediates
@@ -253,10 +270,7 @@ loop:   OUT           ; Show A
     ),
 
     BuiltinProgram(
-      name: 'Hello (string with LDA [B])',
-      description:
-          'Walks a zero-terminated string with an index in B and outputs '
-          'each character code: 72 69 76 76 79. Extended CPU',
+      id: BuiltinProgramId.hello,
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
       code: '''; Extended CPU: an indexed load
@@ -281,10 +295,7 @@ msg:    .db "HELLO", 0''',
     ),
 
     BuiltinProgram(
-      name: 'Stack reverse (PUSH / POP)',
-      description:
-          'Pushes 1, 2, 3 and pops them back: the stack gives them in '
-          'reverse, 3 2 1. Extended CPU',
+      id: BuiltinProgramId.stackReverse,
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
       code: '''; Extended CPU: the stack grows
@@ -307,9 +318,7 @@ msg:    .db "HELLO", 0''',
     ),
 
     BuiltinProgram(
-      name: 'Multiply (CALL, shifts, AND)',
-      description:
-          'A shift-and-add multiply subroutine: 13 × 11 = 143. Extended CPU',
+      id: BuiltinProgramId.multiply,
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
       code: '''; Extended CPU: a subroutine,
@@ -351,10 +360,7 @@ one:    .db 1''',
     ),
 
     BuiltinProgram(
-      name: 'Bouncing bit (SHL / SHR)',
-      description:
-          'A lit bit runs left to bit 7 and back: 1 2 4 … 128 64 … 1. '
-          'The carry flag catches the bit that falls off. Extended CPU',
+      id: BuiltinProgramId.bouncingBit,
       category: BuiltinProgramCategory.extended,
       mode: CpuMode.extended,
       code: '''; Extended CPU: shifts move a bit;
@@ -376,10 +382,7 @@ right:  OUT
   /// on ports 1-2, LED matrix on 3-4, keypad on 5.
   static const List<BuiltinProgram> devicePrograms = [
     BuiltinProgram(
-      name: 'LCD: Hello, world',
-      description:
-          'Initialises the 16x2 LCD, then writes two lines from a string '
-          'with OUT 2. A newline byte moves to line 2.',
+      id: BuiltinProgramId.lcdHello,
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
       code: '''; Text LCD: port 1 takes commands,
@@ -422,10 +425,7 @@ newline: .db 10
 msg:     .db "Hello, world!\\nGlassBox CPU", 0''',
     ),
     BuiltinProgram(
-      name: 'LCD: custom character',
-      description:
-          'Draws a heart in CGRAM as character 0, then prints it between '
-          'words: "I <heart> CPU".',
+      id: BuiltinProgramId.lcdCustomChar,
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
       code: '''; Custom LCD character: 8 rows
@@ -480,10 +480,7 @@ heart:  .db 0, 10, 31, 31, 31, 14, 4, 0
 msg:    .db "I ", 0, " CPU", 0xFF''',
     ),
     BuiltinProgram(
-      name: 'LED matrix: smiley',
-      description:
-          'Selects row 0, then writes eight row bytes to the 8x8 matrix; it '
-          'moves to the next row after each one.',
+      id: BuiltinProgramId.ledSmiley,
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
       code: '''; LED matrix: port 3 selects a row,
@@ -514,10 +511,7 @@ face:   .db 0b00111100, 0b01000010, 0b10100101, 0b10000001
         .db 0b10100101, 0b10011001, 0b01000010, 0b00111100''',
     ),
     BuiltinProgram(
-      name: 'Keypad echo',
-      description:
-          'Waits for keypad presses (IN 5) and shows each key on the LCD '
-          'and the display. Runs until reset; try a faster clock.',
+      id: BuiltinProgramId.keypadEcho,
       category: BuiltinProgramCategory.devices,
       mode: CpuMode.extended,
       code: '''; Keypad on port 5: IN gives the
@@ -568,9 +562,10 @@ zero:   .db 0''',
     return categories;
   }
 
+  /// The program whose English name is [name], in any language.
   static BuiltinProgram? getByName(String name) {
     try {
-      return all.firstWhere((p) => p.name == name);
+      return all.firstWhere((p) => p.englishName == name);
     } catch (e) {
       return null;
     }
