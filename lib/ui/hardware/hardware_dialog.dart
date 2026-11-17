@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/io/bridge/hardware_bridge.dart';
 import '../../hardware/serial_ports.dart';
+import '../../l10n/board_strings.dart';
 import '../board/glass_widgets.dart';
 import '../theme/glass.dart';
 import 'hardware_controller.dart';
@@ -72,13 +73,10 @@ class _HardwareDialogState extends State<HardwareDialog> {
       builder: (context, _) {
         final bridge = c.bridge;
         final locked = c.connected || c.busy;
+        final t = tBoard;
         return GlassDialogFrame(
-          title: 'REAL HARDWARE',
-          note:
-              'Mirror the I/O ports to an Arduino, ESP32, Raspberry Pi Pico or '
-              'Raspberry Pi running the GlassBox firmware. The screen stays '
-              'the reference: after a reset or step-back the board is resent '
-              'the whole state.',
+          title: t.realHardwareTitle,
+          note: t.hardwareNote,
           width: 560,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,10 +91,10 @@ class _HardwareDialogState extends State<HardwareDialog> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       GlassSegmented<HardwareLinkKind>(
-                        semanticLabel: 'Connection',
-                        options: const [
-                          (HardwareLinkKind.serial, 'USB serial', null),
-                          (HardwareLinkKind.wifi, 'Wi-Fi', null),
+                        semanticLabel: t.connection,
+                        options: [
+                          (HardwareLinkKind.serial, t.usbSerial, null),
+                          (HardwareLinkKind.wifi, t.wifi, null),
                         ],
                         value: c.kind,
                         onChanged: (k) => setState(() => c.kind = k),
@@ -119,7 +117,7 @@ class _HardwareDialogState extends State<HardwareDialog> {
               ],
               if (bridge.log.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const GlassSectionTitle('Log'),
+                GlassSectionTitle(t.log),
                 const SizedBox(height: 6),
                 _LogView(lines: bridge.log),
               ],
@@ -128,19 +126,19 @@ class _HardwareDialogState extends State<HardwareDialog> {
           actions: [
             if (c.connected) ...[
               GlassButton(
-                label: 'Resend state',
-                tooltip: 'Reset the board and send the whole state again',
+                label: t.resendState,
+                tooltip: t.resendTooltip,
                 onPressed: bridge.resync,
               ),
-              GlassButton(label: 'Disconnect', onPressed: c.disconnect),
+              GlassButton(label: t.disconnect, onPressed: c.disconnect),
             ] else
               GlassButton(
-                label: c.busy ? 'Connecting…' : 'Connect',
+                label: c.busy ? t.connecting : t.connect,
                 primary: true,
                 onPressed: c.busy || !_canConnect ? null : _connect,
               ),
             GlassButton(
-              label: 'Close',
+              label: t.close,
               onPressed: () => Navigator.of(context).pop(),
             ),
           ],
@@ -159,42 +157,40 @@ class _HardwareDialogState extends State<HardwareDialog> {
     if (!serial.supported) {
       return _Hint(serial.unsupportedReason, warning: true);
     }
+    final t = tBoard;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (serial.usesBrowserPicker)
-          const _Hint(
-            'Plug the board in, then Connect: the browser asks which port '
-            'to use.',
-          )
+          _Hint(t.browserPickerHint)
         else
           Row(
             children: [
               Expanded(
                 child: _Dropdown<String>(
-                  label: 'Port',
+                  label: t.portLabel,
                   value: c.serialPort,
                   items: [for (final p in _ports) (p.name, p.label)],
-                  empty: 'No serial port found: plug the board in',
+                  empty: t.noSerialPort,
                   onChanged: (v) => setState(() => c.serialPort = v),
                 ),
               ),
               const SizedBox(width: 8),
               GlassButton(
-                label: 'Refresh',
-                tooltip: 'List the serial ports again',
+                label: t.refresh,
+                tooltip: t.refreshTooltip,
                 onPressed: _refreshPorts,
               ),
             ],
           ),
         const SizedBox(height: 10),
         _Dropdown<int>(
-          label: 'Speed',
+          label: t.speed,
           value: c.baud,
-          items: const [
-            (115200, '115200 baud (firmware default)'),
-            (57600, '57600 baud'),
-            (9600, '9600 baud'),
+          items: [
+            (115200, t.baud(115200, true)),
+            (57600, t.baud(57600, false)),
+            (9600, t.baud(9600, false)),
           ],
           onChanged: (v) => setState(() => c.baud = v ?? c.baud),
         ),
@@ -207,6 +203,7 @@ class _HardwareDialogState extends State<HardwareDialog> {
         kIsWeb &&
         Uri.base.scheme == 'https' &&
         !_address.text.trim().startsWith('wss://');
+    final t = tBoard;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -219,7 +216,7 @@ class _HardwareDialogState extends State<HardwareDialog> {
           ),
           cursorColor: Glass.bus,
           decoration: InputDecoration(
-            labelText: 'Board address',
+            labelText: t.boardAddress,
             labelStyle: const TextStyle(color: Glass.muted, fontSize: 13),
             floatingLabelStyle: const TextStyle(color: Glass.driveText),
             hintText: '192.168.1.50:81',
@@ -233,18 +230,10 @@ class _HardwareDialogState extends State<HardwareDialog> {
           onSubmitted: (_) => _connect(),
         ),
         const SizedBox(height: 8),
-        const _Hint(
-          'ESP32: the address it prints on its serial port at boot, port 81. '
-          'Raspberry Pi: the bridge script\'s address, port 8765.',
-        ),
+        _Hint(t.addressHint),
         if (mixedContent) ...[
           const SizedBox(height: 6),
-          const _Hint(
-            'This page is served over https, so the browser will block a '
-            'plain ws:// address. Run GlassBox from http:// or the desktop '
-            'app for Wi-Fi.',
-            warning: true,
-          ),
+          _Hint(t.mixedContent, warning: true),
         ],
       ],
     );
@@ -265,22 +254,23 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bridge = controller.bridge;
+    final t = tBoard;
     final (dot, title, detail) = switch (bridge.status) {
       BridgeStatus.connected => (
         Glass.ok,
-        'Connected to ${bridge.board!.board}',
+        t.connectedTo(bridge.board!.board),
         '${bridge.link!.description} · '
-            '${bridge.board!.parts.isEmpty ? 'no parts reported' : bridge.board!.parts.map((p) => p.label).join(', ')}',
+            '${bridge.board!.parts.isEmpty ? t.noPartsReported : bridge.board!.parts.map((p) => p.label).join(', ')}',
       ),
       BridgeStatus.connecting => (
         Glass.bus,
-        'Connecting…',
+        t.connecting,
         bridge.link?.description ?? '',
       ),
       BridgeStatus.disconnected => (
         Glass.faint,
-        'Not connected',
-        'The simulated devices work without a board.',
+        t.notConnected,
+        t.worksWithoutBoard,
       ),
     };
     return Container(
@@ -318,8 +308,8 @@ class _StatusBanner extends StatelessWidget {
           if (bridge.status == BridgeStatus.connected)
             Text(
               bridge.queued + bridge.inFlight == 0
-                  ? 'in step'
-                  : '${bridge.queued + bridge.inFlight} to send',
+                  ? t.inStep
+                  : t.toSend(bridge.queued + bridge.inFlight),
               style: Glass.code.copyWith(fontSize: 11, color: Glass.muted),
             ),
         ],
@@ -346,7 +336,7 @@ class _Dropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return _Hint(empty ?? 'Nothing to choose', warning: true);
+      return _Hint(empty ?? tBoard.nothingToChoose, warning: true);
     }
     return InputDecorator(
       decoration: InputDecoration(

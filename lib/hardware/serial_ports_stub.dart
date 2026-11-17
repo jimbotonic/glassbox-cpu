@@ -1,4 +1,5 @@
 import '../core/io/bridge/hardware_bridge.dart';
+import '../l10n/board_strings.dart';
 import 'serial_ports.dart';
 
 SerialPorts create() => _Unsupported();
@@ -8,8 +9,7 @@ class _Unsupported extends SerialPorts {
   bool get supported => false;
 
   @override
-  String get unsupportedReason =>
-      'USB serial is not available on this platform.';
+  String get unsupportedReason => tBoard.serialUnavailable;
 
   @override
   bool get usesBrowserPicker => false;

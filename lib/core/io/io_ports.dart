@@ -1,3 +1,4 @@
+import '../../l10n/board_strings.dart';
 import 'keypad.dart';
 import 'led_matrix.dart';
 import 'text_lcd.dart';
@@ -16,6 +17,9 @@ abstract class IoDevice {
 
   /// What [port] does on this device, e.g. `LCD data`.
   String portName(int port);
+
+  /// [port]'s role in a list of this device's ports, e.g. `data`.
+  String portRole(int port) => portName(port);
 
   /// The CPU writes [value] to [port] (OUT).
   void write(int port, int value);
@@ -97,8 +101,8 @@ class IoPorts {
 
   /// What [port] is for, e.g. `display` or `LCD data`.
   String portName(int port) {
-    if (port == displayPort) return 'display';
-    return deviceAt(port)?.portName(port & 0xFF) ?? 'nothing connected';
+    if (port == displayPort) return tBoard.displayPort;
+    return deviceAt(port)?.portName(port & 0xFF) ?? tBoard.nothingConnected;
   }
 
   void addListener(PortWriteListener listener) => _listeners.add(listener);

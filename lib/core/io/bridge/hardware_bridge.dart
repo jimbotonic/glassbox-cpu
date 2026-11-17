@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import '../../cpu.dart';
+import '../../../l10n/board_strings.dart';
 import '../keypad.dart';
 import 'protocol.dart';
 
@@ -97,14 +98,14 @@ class HardwareBridge {
     _error = null;
     _board = null;
     _setStatus(BridgeStatus.connecting);
-    _note('Connecting to ${link.description}');
+    _note(tBoard.connectingTo(link.description));
     try {
       await link.open();
       final hello = _hello = Completer<BoardHello>();
       _subscription = link.received.listen(
         _receive,
-        onError: (Object e) => _lost('Link error: $e'),
-        onDone: () => _lost('${link.description} closed'),
+        onError: (Object e) => _lost(tBoard.linkError(e)),
+        onDone: () => _lost(tBoard.linkClosed(link.description)),
       );
       final retry = Timer.periodic(helloRetry, (_) => _sendRaw(helloLine()));
       _sendRaw(helloLine());
@@ -112,10 +113,7 @@ class HardwareBridge {
       try {
         board = await hello.future.timeout(
           helloTimeout,
-          onTimeout: () => throw TimeoutException(
-            'No answer from the board. Is the GlassBox firmware on it, '
-            'at the right speed?',
-          ),
+          onTimeout: () => throw TimeoutException(tBoard.noAnswer),
         );
       } finally {
         retry.cancel();
@@ -123,8 +121,7 @@ class HardwareBridge {
       }
       if (board.version != protocolVersion) {
         throw StateError(
-          'The board speaks protocol ${board.version}; this GlassBox '
-          'speaks $protocolVersion. Update the firmware.',
+          tBoard.protocolMismatch(board.version, protocolVersion),
         );
       }
       if (_link != link) return; // disconnected meanwhile
@@ -135,15 +132,16 @@ class HardwareBridge {
       cpu.io.addStateListener(_scheduleResync);
       _setStatus(BridgeStatus.connected);
       _note(
-        'Connected: ${board.board} with '
-        '${board.parts.isEmpty ? 'no parts' : board.parts.map((p) => p.name).join(', ')}',
+        tBoard.connectedNote(board.board, [
+          for (final p in board.parts) p.name,
+        ]),
       );
       _scheduleResync();
     } catch (e) {
       final message = e is TimeoutException ? e.message ?? '$e' : '$e';
       await _teardown();
       _error = message;
-      _note('Failed: $message');
+      _note(tBoard.failed(message));
       _setStatus(BridgeStatus.disconnected);
       rethrow;
     }
@@ -154,7 +152,7 @@ class HardwareBridge {
     if (_link == null) return;
     final description = _link!.description;
     await _teardown();
-    _note('Disconnected from $description');
+    _note(tBoard.disconnectedFrom(description));
     _setStatus(BridgeStatus.disconnected);
   }
 
@@ -213,7 +211,7 @@ class HardwareBridge {
     if (_status != BridgeStatus.connected) return;
     _queue.addAll(lines);
     if (_queue.length > maxQueue) {
-      _note('The board cannot keep up; resending the state instead');
+      _note(tBoard.cannotKeepUp);
       _queue.clear();
       _scheduleResync();
       return;
@@ -236,7 +234,7 @@ class HardwareBridge {
     _ackTimer = _inFlight == 0
         ? null
         : Timer(ackTimeout, () {
-            _note('No answer for $_inFlight line(s); resending the state');
+            _note(tBoard.noAnswerLines(_inFlight));
             _inFlight = 0;
             _scheduleResync();
           });
@@ -246,7 +244,7 @@ class HardwareBridge {
     try {
       _link?.send(line);
     } catch (e) {
-      _lost('Send failed: $e');
+      _lost(tBoard.sendFailed(e));
     }
   }
 
@@ -260,12 +258,12 @@ class HardwareBridge {
         case Ack():
           _answered();
         case BoardError(:final message):
-          _note('Board refused a line: $message');
+          _note(tBoard.boardRefused(message));
           _answered();
         case KeyPress(:final code):
           _keyPressed(code);
         case BoardLog(:final message):
-          _note('board: $message');
+          _note(tBoard.boardLog(message));
         case null:
           break;
       }
@@ -282,7 +280,7 @@ class HardwareBridge {
     final key = String.fromCharCode(code);
     final keypad = cpu.io.device<Keypad>();
     if (keypad == null || !Keypad.layout.contains(key)) {
-      _note("Key '$key' from the board is not on the keypad");
+      _note(tBoard.keyNotOnPad(key));
       return;
     }
     keypad.press(key);

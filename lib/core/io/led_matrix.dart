@@ -1,4 +1,5 @@
 import 'io_ports.dart';
+import '../../l10n/board_strings.dart';
 
 /// An 8x8 LED matrix driven a row at a time.
 ///
@@ -22,13 +23,18 @@ class LedMatrix extends IoDevice {
   int _row = 0;
 
   @override
-  String get name => 'LED matrix';
+  String get name => tBoard.ledMatrix;
 
   @override
   List<int> get ports => [rowPort, dataPort];
 
   @override
-  String portName(int port) => port == rowPort ? 'matrix row' : 'matrix data';
+  String portName(int port) =>
+      port == rowPort ? tBoard.matrixRowPort : tBoard.matrixDataPort;
+
+  @override
+  String portRole(int port) =>
+      port == rowPort ? tBoard.rowRole : tBoard.dataRole;
 
   /// Whether the LED in [row], [column] (0 = left) is lit.
   bool isLit(int row, int column) => (_rows[row] >> (7 - column)) & 1 == 1;

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 import '../core/io/bridge/hardware_bridge.dart';
+import '../l10n/board_strings.dart';
 import 'serial_ports.dart';
 
 SerialPorts create() => _DesktopSerialPorts();
@@ -26,9 +27,8 @@ class _DesktopSerialPorts extends SerialPorts {
   }
 
   @override
-  String get unsupportedReason => _desktop
-      ? 'The serial port library could not be loaded.'
-      : 'USB serial needs the desktop or web build.';
+  String get unsupportedReason =>
+      _desktop ? tBoard.serialLibraryMissing : tBoard.serialNeedsBuild;
 
   @override
   bool get usesBrowserPicker => false;
@@ -60,7 +60,7 @@ class _DesktopSerialPorts extends SerialPorts {
     String? name, {
     int baud = SerialPorts.defaultBaud,
   }) async {
-    if (name == null) throw ArgumentError('Choose a serial port');
+    if (name == null) throw ArgumentError(tBoard.chooseSerialPort);
     return _DesktopSerialLink(name, baud);
   }
 }
@@ -87,8 +87,7 @@ class _DesktopSerialLink implements HardwareLink {
       final error = SerialPort.lastError;
       port.dispose();
       throw StateError(
-        'Cannot open $name: ${error?.message ?? 'unknown error'}'
-        '${Platform.isLinux ? ' (on Linux, your user may need to be in the dialout group)' : ''}',
+        tBoard.cannotOpenPort(name, error?.message, Platform.isLinux),
       );
     }
     final config = SerialPortConfig()
@@ -111,7 +110,7 @@ class _DesktopSerialLink implements HardwareLink {
       Uint8List.fromList(latin1.encode('$line\n')),
       timeout: 500,
     );
-    if (written < 0) throw StateError('Write to $name failed');
+    if (written < 0) throw StateError(tBoard.writeFailed(name));
   }
 
   @override

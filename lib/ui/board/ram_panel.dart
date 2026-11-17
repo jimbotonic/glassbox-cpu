@@ -5,6 +5,7 @@ import '../../core/control_word.dart';
 import '../../core/cpu.dart';
 import '../../core/cpu_mode.dart';
 import '../../core/disassembler.dart';
+import '../../l10n/board_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 import 'ram_edit_dialog.dart';
@@ -122,6 +123,7 @@ class _RamPanelState extends State<RamPanel> {
     final pc = cpu.programCounter;
     final sp = cpu.stackPointer;
     final extended = mode == CpuMode.extended;
+    final t = tBoard;
 
     return GlassPanel(
       role: role,
@@ -133,21 +135,18 @@ class _RamPanelState extends State<RamPanel> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              const Expanded(child: Text('RAM', style: Glass.panelTitle)),
+              Expanded(child: Text(t.ram, style: Glass.panelTitle)),
               RoleLabel(role: role),
             ],
           ),
           const SizedBox(height: 2),
-          Text(
-            '${mode.ramSize} bytes · ${mode.addressBits}-bit addresses · tap to edit',
-            style: Glass.note,
-          ),
+          Text(t.ramSummary(mode.ramSize, mode.addressBits), style: Glass.note),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: GlassButton(
-                  label: 'Go to PC',
+                  label: t.goToPc,
                   detail: mode.hexAddress(pc),
                   height: 32,
                   onPressed: () => _reveal(pc, center: true),
@@ -157,7 +156,7 @@ class _RamPanelState extends State<RamPanel> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: GlassButton(
-                    label: 'Go to SP',
+                    label: t.goToSp,
                     detail: Glass.hex2(sp),
                     height: 32,
                     onPressed: () => _reveal(sp, center: true),

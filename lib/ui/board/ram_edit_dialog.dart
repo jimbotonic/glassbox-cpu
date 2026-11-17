@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/assembler.dart';
 import '../../core/cpu_mode.dart';
+import '../../l10n/board_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 
@@ -77,7 +78,7 @@ class RamEditDialogState extends State<RamEditDialog> {
     final input = _controller.text.trim();
     if (input.isEmpty) {
       setState(() {
-        _errorMessage = 'Please enter a value';
+        _errorMessage = tBoard.enterValue;
       });
       return;
     }
@@ -86,15 +87,14 @@ class RamEditDialogState extends State<RamEditDialog> {
 
     if (parsedValue == null) {
       setState(() {
-        _errorMessage =
-            'Invalid input. Use instruction, hex (0xFF), or decimal (0-255)';
+        _errorMessage = tBoard.invalidInput;
       });
       return;
     }
 
     if (parsedValue < 0 || parsedValue > 255) {
       setState(() {
-        _errorMessage = 'Value must be between 0 and 255 (got: $parsedValue)';
+        _errorMessage = tBoard.valueOutOfRange(parsedValue);
       });
       return;
     }
@@ -113,11 +113,10 @@ class RamEditDialogState extends State<RamEditDialog> {
   Widget build(BuildContext context) {
     final address = widget.mode.hexAddress(widget.address);
     final current = widget.currentValue;
+    final t = tBoard;
     return GlassDialogFrame(
-      title: 'EDIT RAM[$address]',
-      note:
-          'Now ${Glass.hex2(current)} · $current. Type an instruction, a hex '
-          'value or a decimal value.',
+      title: t.editTitle(address),
+      note: t.editNote(Glass.hex2(current), current),
       width: 420,
       scrollable: false,
       body: Column(
@@ -133,7 +132,7 @@ class RamEditDialogState extends State<RamEditDialog> {
             ),
             cursorColor: Glass.bus,
             decoration: InputDecoration(
-              labelText: 'Instruction / hex / decimal',
+              labelText: t.inputLabel,
               labelStyle: const TextStyle(color: Glass.muted, fontSize: 13),
               floatingLabelStyle: const TextStyle(color: Glass.driveText),
               hintText: 'LDI #5   0xFF   240',
@@ -159,17 +158,16 @@ class RamEditDialogState extends State<RamEditDialog> {
           ),
           if (widget.mode == CpuMode.extended) ...[
             const SizedBox(height: 6),
-            const Text(
-              'An instruction with an operand stores only its opcode byte; '
-              'edit the next address for the operand.',
-              style: TextStyle(color: Glass.dim, fontSize: 11),
+            Text(
+              t.operandNote,
+              style: const TextStyle(color: Glass.dim, fontSize: 11),
             ),
           ],
         ],
       ),
       actions: [
-        GlassButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
-        GlassButton(label: 'Save', primary: true, onPressed: _submitValue),
+        GlassButton(label: t.cancel, onPressed: () => Navigator.pop(context)),
+        GlassButton(label: t.save, primary: true, onPressed: _submitValue),
       ],
     );
   }

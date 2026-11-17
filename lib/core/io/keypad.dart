@@ -1,4 +1,5 @@
 import 'io_ports.dart';
+import '../../l10n/board_strings.dart';
 
 /// A 4x4 keypad on one input port.
 ///
@@ -23,13 +24,13 @@ class Keypad extends IoDevice {
   int? _pending;
 
   @override
-  String get name => 'Keypad';
+  String get name => tBoard.keypad;
 
   @override
   List<int> get ports => [port];
 
   @override
-  String portName(int port) => 'keypad';
+  String portName(int port) => tBoard.keypadPort;
 
   /// The user presses [key], one of [layout]. A key not yet read is
   /// replaced, as a one-key buffer would.
