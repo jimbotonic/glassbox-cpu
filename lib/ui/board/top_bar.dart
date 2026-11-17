@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/cpu_mode.dart';
+import '../../l10n/l10n.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 
@@ -27,6 +28,7 @@ class TopBar extends StatelessWidget {
   final VoidCallback? onRunToggle;
   final VoidCallback? onRunToCursor;
   final VoidCallback onReset;
+  final ValueChanged<Lang> onLangChanged;
 
   const TopBar({
     super.key,
@@ -46,6 +48,7 @@ class TopBar extends StatelessWidget {
     required this.onRunToggle,
     required this.onRunToCursor,
     required this.onReset,
+    required this.onLangChanged,
   });
 
   /// Selectable clock speeds in Hz, on a 1-2-5 log scale.
@@ -142,6 +145,13 @@ class TopBar extends StatelessWidget {
       options: const [(false, 'Simple', null), (true, 'Detailed', null)],
       value: detailed,
       onChanged: onDetailedChanged,
+    ),
+    const SizedBox(width: 12),
+    GlassSegmented<Lang>(
+      semanticLabel: 'Language',
+      options: [for (final l in Lang.values) (l, l.code, null)],
+      value: L10n.current,
+      onChanged: onLangChanged,
     ),
     const SizedBox(width: 8),
     GlassButton(

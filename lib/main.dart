@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'cpu_board.dart';
+import 'l10n/l10n.dart';
 import 'ui/theme/glass.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  L10n.init(PlatformDispatcher.instance.locale.languageCode);
   runApp(const CPUSimulatorApp());
 }
 

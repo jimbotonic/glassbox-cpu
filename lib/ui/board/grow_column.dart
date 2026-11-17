@@ -26,8 +26,8 @@ class GrowColumn extends MultiChildRenderObjectWidget {
       RenderGrowColumn(gap: gap, maxGrow: maxGrow);
 
   @override
-  void updateRenderObject(BuildContext context, RenderGrowColumn render) {
-    render
+  void updateRenderObject(BuildContext context, RenderGrowColumn renderObject) {
+    renderObject
       ..gap = gap
       ..maxGrow = maxGrow;
   }
