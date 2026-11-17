@@ -6,6 +6,7 @@ import '../../core/cpu_mode.dart';
 import '../../core/disassembler.dart';
 import '../../core/microcode.dart';
 import '../../core/opcode.dart';
+import '../../l10n/app_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 import 'signal_roles.dart';
@@ -30,7 +31,7 @@ class MicrocodePanel extends StatelessWidget {
             mode: mode,
             operand: cpu.currentOperand,
           )
-        : 'fetch';
+        : tApp.fetch;
     final count = started
         ? Microcode.stepCount(
             opcode,
@@ -54,7 +55,7 @@ class MicrocodePanel extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'MICROCODE · $name',
+                        tApp.microcodeTitle(name),
                         style: Glass.panelTitle,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -197,7 +198,7 @@ class MicrocodePanel extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              used ? wordNote(stepWord) : 'unused',
+              used ? wordNote(stepWord) : tApp.unused,
               style: TextStyle(
                 fontSize: 12,
                 color: used ? const Color(0xFFA8B0BA) : const Color(0xFF4A525C),
