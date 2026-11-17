@@ -2,9 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'cpu_board.dart';
+import 'l10n/app_strings.dart';
+import 'l10n/l10n.dart';
 import 'ui/theme/glass.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  L10n.init(PlatformDispatcher.instance.locale.languageCode);
   runApp(const CPUSimulatorApp());
 }
 
@@ -50,6 +54,7 @@ class _App extends StatelessWidget {
     final height = size.height;
 
     if ((width < requiredWidth || height < requiredHeight) && kIsWeb) {
+      final t = tApp;
       return Scaffold(
         backgroundColor: Glass.ground,
         body: Center(
@@ -66,12 +71,11 @@ class _App extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('WINDOW TOO SMALL', style: Glass.dialogTitle),
+                Text(t.windowTooSmallTitle, style: Glass.dialogTitle),
                 const SizedBox(height: 8),
-                const Text(
-                  'GlassBox CPU shows the whole board at once. Make the '
-                  'window larger or switch to full screen.',
-                  style: TextStyle(
+                Text(
+                  t.windowTooSmallBody,
+                  style: const TextStyle(
                     color: Glass.textSoft,
                     fontSize: 13,
                     height: 1.5,
@@ -79,8 +83,12 @@ class _App extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Needs ${requiredWidth}x$requiredHeight px · now '
-                  '${width.round()}x${height.round()} px',
+                  t.windowSizes(
+                    requiredWidth,
+                    requiredHeight,
+                    width.round(),
+                    height.round(),
+                  ),
                   style: Glass.code.copyWith(color: Glass.muted),
                 ),
               ],

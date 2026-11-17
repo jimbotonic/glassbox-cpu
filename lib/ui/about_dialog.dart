@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_strings.dart';
 import 'board/glass_widgets.dart';
 import 'theme/glass.dart';
 
@@ -25,11 +26,37 @@ class _AboutContent extends StatelessWidget {
           launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
   );
 
+  /// [template] as spans, with `{muaz}` and `{eater}` made into links.
+  List<InlineSpan> _credits(String template) {
+    final links = {
+      '{muaz}': _link('AbdulMuaz', 'https://devmuaz.com'),
+      '{eater}': _link('Ben Eater', 'https://eater.net'),
+    };
+    final spans = <InlineSpan>[];
+    var rest = template;
+    while (rest.isNotEmpty) {
+      final hits = [
+        for (final key in links.keys)
+          if (rest.contains(key)) (rest.indexOf(key), key),
+      ]..sort((a, b) => a.$1.compareTo(b.$1));
+      if (hits.isEmpty) {
+        spans.add(TextSpan(text: rest));
+        break;
+      }
+      final (at, key) = hits.first;
+      if (at > 0) spans.add(TextSpan(text: rest.substring(0, at)));
+      spans.add(links[key]!);
+      rest = rest.substring(at + key.length);
+    }
+    return spans;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = tApp;
     return GlassDialogFrame(
-      title: 'ABOUT GLASSBOX CPU',
-      note: 'every signal visible',
+      title: t.aboutTitle,
+      note: t.tagline,
       width: 440,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,17 +64,8 @@ class _AboutContent extends StatelessWidget {
           Text.rich(
             TextSpan(
               children: [
-                const TextSpan(
-                  text:
-                      'A visual simulator of an 8-bit breadboard CPU: every '
-                      'step shows who drives the bus, who reads it, and why.'
-                      '\n\n',
-                ),
-                const TextSpan(text: 'Based on the 8-bit CPU Simulator by '),
-                _link('AbdulMuaz', 'https://devmuaz.com'),
-                const TextSpan(text: ', inspired by '),
-                _link('Ben Eater', 'https://eater.net'),
-                const TextSpan(text: "'s 8-bit breadboard computer."),
+                TextSpan(text: '${t.aboutIntro}\n\n'),
+                ..._credits(t.aboutCredits),
               ],
             ),
             style: const TextStyle(
@@ -57,16 +75,19 @@ class _AboutContent extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const GlassSectionTitle('Licence'),
-          const Text(
-            'Released under the GNU GPL v3. The original simulator code '
-            'remains under the MIT licence (see LICENSE and LICENSE-MIT).',
-            style: TextStyle(color: Glass.muted, fontSize: 12, height: 1.5),
+          GlassSectionTitle(t.licenceTitle),
+          Text(
+            t.licenceText,
+            style: const TextStyle(
+              color: Glass.muted,
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            '"Every complex system is just simple parts working together."',
-            style: TextStyle(
+          Text(
+            t.quote,
+            style: const TextStyle(
               color: Glass.dim,
               fontSize: 12,
               fontStyle: FontStyle.italic,

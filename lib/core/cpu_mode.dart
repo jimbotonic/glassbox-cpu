@@ -1,3 +1,5 @@
+import '../l10n/app_strings.dart';
+
 /// The two machines the simulator can be.
 ///
 /// * [classic]: the original breadboard computer. 16 bytes of RAM, one-byte
@@ -6,23 +8,19 @@
 ///   a whole opcode byte followed by an 8-bit operand byte when needed,
 ///   more ALU operations, a stack and indexed loads.
 enum CpuMode {
-  classic(
-    'Classic',
-    ramSize: 16,
-    description: '16 bytes of RAM, 4-bit operands, 11 instructions',
-  ),
-  extended(
-    'Extended',
-    ramSize: 256,
-    description:
-        '256 bytes of RAM, 8-bit operands, stack, I/O ports, 29 instructions',
-  );
+  classic(ramSize: 16),
+  extended(ramSize: 256);
 
-  final String label;
   final int ramSize;
-  final String description;
 
-  const CpuMode(this.label, {required this.ramSize, required this.description});
+  const CpuMode({required this.ramSize});
+
+  /// Name in the current language, e.g. `Classic`.
+  String get label => this == classic ? tApp.classicLabel : tApp.extendedLabel;
+
+  /// One-line summary in the current language, e.g. `16 bytes of RAM, …`.
+  String get description =>
+      this == classic ? tApp.classicDescription : tApp.extendedDescription;
 
   /// Mask applied to addresses (PC, MAR, SP): 0xF or 0xFF.
   int get addressMask => ramSize - 1;

@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'control_word.dart';
 import 'cpu.dart';
 import 'microcode.dart';
@@ -17,8 +18,15 @@ enum BusNode {
   portRegister('PORT'),
   device('I/O');
 
-  final String label;
-  const BusNode(this.label);
+  final String _label;
+  const BusNode(this._label);
+
+  /// Short name on the datapath, e.g. `PC`; `I/O` is translated.
+  String get label => switch (this) {
+    device => tApp.ioNode,
+    alu => tApp.groupAlu,
+    _ => _label,
+  };
 }
 
 /// Plain-language description of the micro-step a [Cpu] just executed:
@@ -78,18 +86,17 @@ class StepInfo {
   factory StepInfo.of(Cpu cpu) {
     final step = cpu.executedStep;
     final word = cpu.controlWord;
+    final t = tApp;
 
     if (step == null) {
       return StepInfo(
         step: null,
         controlWord: 0,
-        purpose: 'ready',
+        purpose: t.ready,
         source: null,
         destinations: const [],
         transfer: '',
-        effects: [
-          'next step fetches the instruction at ${cpu.mode.hexAddress(cpu.programCounter)}',
-        ],
+        effects: [t.nextFetchesAt(cpu.mode.hexAddress(cpu.programCounter))],
       );
     }
 
@@ -107,7 +114,7 @@ class StepInfo {
       sourceLabel = 'RAM[$mar]';
     } else if (on(ControlWord.io)) {
       source = BusNode.instructionRegister;
-      sourceLabel = 'IR operand';
+      sourceLabel = t.irOperand;
     } else if (on(ControlWord.ao)) {
       source = BusNode.registerA;
       sourceLabel = 'A';
@@ -146,7 +153,7 @@ class StepInfo {
 
     final transfer = sourceLabel == null
         ? ''
-        : '$sourceLabel = ${_hex8(cpu.bus)} → bus'
+        : '$sourceLabel = ${_hex8(cpu.bus)} → ${t.bus}'
               '${destinationLabels.isEmpty ? '' : ' → ${destinationLabels.join(', ')}'}';
 
     final effects = <String>[
@@ -154,9 +161,9 @@ class StepInfo {
       if (on(ControlWord.spInc)) 'SP + 1 → ${_hex8(cpu.stackPointer)}',
       if (on(ControlWord.spDec)) 'SP − 1 → ${_hex8(cpu.stackPointer)}',
       if (on(ControlWord.fi))
-        'flags C=${cpu.carryFlag ? 1 : 0} Z=${cpu.zeroFlag ? 1 : 0}',
-      if (on(ControlWord.hlt)) 'clock stopped',
-      if (word == 0) 'nothing to do this cycle',
+        t.flags(cpu.carryFlag ? 1 : 0, cpu.zeroFlag ? 1 : 0),
+      if (on(ControlWord.hlt)) t.clockStopped,
+      if (word == 0) t.nothingThisCycle,
     ];
 
     return StepInfo(
@@ -175,7 +182,7 @@ class StepInfo {
 
   /// `port 2 (LCD data)`: a port and what it is for.
   static String portLabel(Cpu cpu, int port) =>
-      'port $port (${cpu.io.portName(port)})';
+      tApp.port(port, cpu.io.portName(port));
 
   /// The ALU operation selected by [word], e.g. `A + B` or `A << 1`.
   static String aluLabel(int word) {
@@ -190,8 +197,8 @@ class StepInfo {
   }
 
   static String _purpose(Cpu cpu, int step) {
-    if (step == 0) return 'fetch: address of next instruction';
-    if (step == 1) return 'fetch: load instruction, advance PC';
+    if (step == 0) return tApp.fetchAddress;
+    if (step == 1) return tApp.fetchLoad;
     final opcode = cpu.currentOpcode;
     final operand = cpu.currentOperand;
     return switch (opcode.operand) {

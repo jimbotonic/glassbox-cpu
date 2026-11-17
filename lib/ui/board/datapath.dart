@@ -7,8 +7,10 @@ import '../../core/cpu_mode.dart';
 import '../../core/disassembler.dart';
 import '../../core/opcode.dart';
 import '../../core/step_info.dart';
+import '../../l10n/board_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
+import 'grow_column.dart';
 
 /// The modules around the bus: who drives it (blue), who reads it
 /// (orange), the flags hanging off the ALU, and the display fed by the
@@ -39,6 +41,9 @@ class Datapath extends StatelessWidget {
   /// display leaves, measured up from the register's bottom edge. The bus
   /// line ends at the first, so the wire passes under its end.
   static const double _outBusFromBottom = 42;
+
+  /// Most height a card gains when the board has room to spare.
+  static const double _maxGrow = 14;
   static const double _outWireFromBottom = 17;
 
   bool _on(ControlWord s) => s.isActive(cpu.controlWord);
@@ -95,52 +100,62 @@ class Datapath extends StatelessWidget {
     final sp = cpu.stackPointer;
     final stackDepth = Cpu.initialStackPointer - sp;
     final isData = assembly?.dataAddresses.contains(mar) ?? false;
+    final t = tBoard;
 
     final ir = cpu.instructionRegister;
     final irNote = info.step == null && cpu.programCounter == 0 && ir == 0
-        ? 'empty until the first fetch'
+        ? t.irEmpty
         : extended
-        ? '${Disassembler.disassemble(ir, mode: mode, operand: cpu.currentOperand)}'
-              '${cpu.currentOpcode.sizeIn(mode) == 2 ? ' · operand at ${mode.hexAddress(cpu.instructionAddress + 1)}' : ''}'
-        : '${Disassembler.disassemble(ir, mode: mode)} · '
-              'opcode ${ir >> 4} · operand ${ir & 0xF}';
+        ? t.irExtended(
+            Disassembler.disassemble(
+              ir,
+              mode: mode,
+              operand: cpu.currentOperand,
+            ),
+            cpu.currentOpcode.sizeIn(mode) == 2
+                ? mode.hexAddress(cpu.instructionAddress + 1)
+                : null,
+          )
+        : t.irClassic(
+            Disassembler.disassemble(ir, mode: mode),
+            ir >> 4,
+            ir & 0xF,
+          );
 
     final left = <Widget>[
       _Module(
-        name: 'PROGRAM COUNTER',
+        name: t.programCounter,
         value: cpu.programCounter,
         bits: mode.addressBits,
         role: _role(ControlWord.co, ControlWord.j, ControlWord.ce),
-        idle: '${mode.addressBits}-bit',
+        idle: t.bitsWide(mode.addressBits),
         countText: '+1',
         note: cpu.halted
-            ? 'stopped'
-            : 'next: ${_instructionText(cpu.programCounter)}',
+            ? t.stopped
+            : t.next(_instructionText(cpu.programCounter)),
         stubOnRight: true,
       ),
       _Module(
-        name: 'MEMORY ADDRESS',
+        name: t.memoryAddress,
         value: mar,
         bits: mode.addressBits,
         role: _role(null, ControlWord.mi),
         idle: 'MAR',
-        note:
-            'selects RAM[$marHex]'
-            '${marSymbol == null ? '' : ' · $marSymbol'}',
+        note: t.selectsRam(marHex, marSymbol),
         stubOnRight: true,
       ),
       _Module(
         name: 'RAM [MAR]',
         value: ramValue,
         role: _role(ControlWord.ro, ControlWord.ri),
-        idle: 'port',
+        idle: t.ramPortIdle,
         note: isData
             ? "RAM[$marHex] = ${_decoded(ramValue)}"
             : 'RAM[$marHex] = ${Glass.hex2(ramValue)}',
         stubOnRight: true,
       ),
       _Module(
-        name: 'INSTRUCTION',
+        name: t.instruction,
         value: ir,
         role: _role(ControlWord.io, ControlWord.ii),
         idle: 'IR',
@@ -149,7 +164,7 @@ class Datapath extends StatelessWidget {
       ),
       if (extended)
         _Module(
-          name: 'STACK POINTER',
+          name: t.stackPointer,
           value: sp,
           role: _role(ControlWord.spo, null) == BusRole.drive
               ? BusRole.drive
@@ -157,11 +172,9 @@ class Datapath extends StatelessWidget {
                     (_on(ControlWord.spInc) || _on(ControlWord.spDec)))
               ? BusRole.count
               : BusRole.idle,
-          idle: '8-bit',
+          idle: t.bitsWide(8),
           countText: _on(ControlWord.spInc) ? '+1' : '−1',
-          note: stackDepth == 0
-              ? 'empty · grows down'
-              : '$stackDepth byte${stackDepth == 1 ? '' : 's'} on the stack',
+          note: stackDepth == 0 ? t.stackEmpty : t.stackBytes(stackDepth),
           stubOnRight: true,
         ),
     ];
@@ -171,44 +184,46 @@ class Datapath extends StatelessWidget {
 
     final right = <Widget>[
       _Module(
-        name: 'A REGISTER',
+        name: t.registerA,
         value: cpu.registerA,
         role: _role(ControlWord.ao, ControlWord.ai),
-        idle: 'accumulator',
+        idle: t.accumulator,
         note: _decoded(cpu.registerA),
       ),
       _Module(
-        name: 'B REGISTER',
+        name: t.registerB,
         value: cpu.registerB,
         role: _role(ControlWord.bo, ControlWord.bi),
-        idle: extended ? 'operand · index' : 'operand',
+        idle: extended ? t.operandIndex : t.operand,
         note: _decoded(cpu.registerB),
       ),
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Module(
-            name: 'ALU · Σ',
-            value: alu.value,
-            role: aluRole,
-            idle: StepInfo.aluLabel(word),
-            note:
-                '${StepInfo.aluLabel(word)} = ${alu.value}'
-                '${alu.carry ? ' · carry out' : ''}',
+          Expanded(
+            child: _Module(
+              name: t.alu,
+              value: alu.value,
+              role: aluRole,
+              idle: StepInfo.aluLabel(word),
+              note: t.aluNote(StepInfo.aluLabel(word), alu.value, alu.carry),
+            ),
           ),
           _FlagsWire(active: fiActive),
-          _Flags(cpu: cpu, latched: fiActive),
+          Expanded(
+            child: _Flags(cpu: cpu, latched: fiActive),
+          ),
         ],
       ),
       if (extended) _portModule(),
       // Last on the right, level with the display's foot: it meets the bus
       // high on its left side, and its wire to the display leaves lower down.
       _Module(
-        name: 'OUTPUT REGISTER',
+        name: t.outputRegister,
         value: cpu.outputRegister,
         role: _role(null, ControlWord.oi),
-        idle: 'port 0',
-        note: '${_decoded(cpu.outputRegister)} · drives the display',
+        idle: t.port(0),
+        note: t.outputNote(_decoded(cpu.outputRegister)),
         stubFromBottom: _outBusFromBottom,
       ),
     ];
@@ -223,7 +238,7 @@ class Datapath extends StatelessWidget {
         // gaps. The display ends the left column and the output register the
         // right, bottoms level, so the red wire runs straight across from the
         // register's left side, under the end of the bus line, to the display.
-        IntrinsicHeight(
+        Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -300,14 +315,15 @@ class Datapath extends StatelessWidget {
         : (stepped && _on(ControlWord.pi)) || devIn
         ? BusRole.read
         : BusRole.idle;
+    final t = tBoard;
     final name = cpu.io.portName(port);
     final note = devIn
         ? '$name ← ${Glass.hex2(cpu.bus)}'
         : devOut
-        ? '$name → bus: ${Glass.hex2(cpu.bus)}'
-        : 'port $port · $name';
+        ? t.portToBus(name, Glass.hex2(cpu.bus))
+        : t.portNote(port, name);
     return _Module(
-      name: 'I/O PORT',
+      name: t.ioPort,
       value: port,
       role: role,
       idle: 'PI · DI · DO',
@@ -315,20 +331,10 @@ class Datapath extends StatelessWidget {
     );
   }
 
-  /// A column whose gaps grow, from [_gap], to fill the height it is given.
-  Widget _spread(List<Widget> children) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      for (int i = 0; i < children.length; i++)
-        i < children.length - 1
-            ? Padding(
-                padding: const EdgeInsets.only(bottom: _gap),
-                child: children[i],
-              )
-            : children[i],
-    ],
-  );
+  /// A column of cards that grow a little, then spread, to fill the height
+  /// the datapath is given.
+  Widget _spread(List<Widget> children) =>
+      GrowColumn(gap: _gap, maxGrow: _maxGrow, children: children);
 }
 
 /// The output register's wire to the display: straight left from the
@@ -376,10 +382,12 @@ class _BusHeader extends StatelessWidget {
     final idle = info.source == null;
     final value = info.busValue;
     final char = Glass.char(value);
+    final t = tBoard;
     final who = idle
-        ? 'nothing drives the bus this step'
-        : '${info.source!.label} drives'
-              '${info.destinations.isEmpty ? '' : ' · ${info.destinations.map((d) => d.label).join(', ')} read${info.destinations.length == 1 ? 's' : ''}'}';
+        ? t.busIdle
+        : t.busWho(info.source!.label, [
+            for (final d in info.destinations) d.label,
+          ]);
     return Row(
       children: [
         const Expanded(child: Divider(color: Glass.border, height: 1)),
@@ -462,6 +470,7 @@ class _Module extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -513,17 +522,21 @@ class _Module extends StatelessWidget {
     final from = stubFromBottom;
     if (from != null) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: EdgeInsets.only(bottom: from - stubHeight / 2),
-            child: stub,
+            child: Align(alignment: Alignment.bottomCenter, child: stub),
           ),
           panel,
         ],
       );
     }
-    return Row(children: stubOnRight ? [panel, stub] : [stub, panel]);
+    final centred = Center(child: stub);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: stubOnRight ? [panel, centred] : [centred, panel],
+    );
   }
 }
 
@@ -547,9 +560,7 @@ class _FlagsWire extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              active
-                  ? 'FI · flags latched from the ALU'
-                  : 'FI · flags in, from the ALU result',
+              active ? tBoard.flagsLatchedWire : tBoard.flagsInWire,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -573,6 +584,7 @@ class _Flags extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = tBoard;
     Widget flag(String letter, bool set, String name) => Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 3),
@@ -581,25 +593,30 @@ class _Flags extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: set ? Glass.led : Glass.border),
         ),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: '$letter ${set ? 1 : 0}',
-                style: const TextStyle(
-                  fontFamily: Glass.mono,
-                  fontWeight: FontWeight.w700,
-                  color: Glass.text,
+        // One line whatever the language: a long flag name shrinks.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$letter ${set ? 1 : 0}',
+                  style: const TextStyle(
+                    fontFamily: Glass.mono,
+                    fontWeight: FontWeight.w700,
+                    color: Glass.text,
+                  ),
                 ),
-              ),
-              TextSpan(
-                text: '  $name',
-                style: const TextStyle(color: Glass.muted),
-              ),
-            ],
+                TextSpan(
+                  text: '  $name',
+                  style: const TextStyle(color: Glass.muted),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 12),
           ),
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12),
         ),
       ),
     );
@@ -611,28 +628,40 @@ class _Flags extends StatelessWidget {
         borderColor: latched ? Glass.count : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [
-                const Text('FLAGS', style: Glass.panelTitle),
+                Text(t.flags, style: Glass.panelTitle),
                 const SizedBox(width: 12),
-                flag('C', cpu.carryFlag, 'carry'),
+                flag('C', cpu.carryFlag, t.carry),
                 const SizedBox(width: 8),
-                flag('Z', cpu.zeroFlag, 'zero'),
-                const SizedBox(width: 12),
-                RoleLabel(
-                  role: latched ? BusRole.count : BusRole.idle,
-                  idle: 'kept',
-                  countText: 'LATCHED',
-                ),
+                flag('Z', cpu.zeroFlag, t.zero),
               ],
             ),
             const SizedBox(height: 5),
-            Text(
-              cpu.mode == CpuMode.classic
-                  ? '→ microcode: decides JC, JZ'
-                  : '→ microcode: decides JC, JZ, JNC, JNZ',
-              style: const TextStyle(fontSize: 11, color: Glass.muted),
+            // Kept or latched sits under the chips, leaving them the width.
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    t.flagsDecide(
+                      cpu.mode == CpuMode.classic
+                          ? 'JC, JZ'
+                          : 'JC, JZ, JNC, JNZ',
+                    ),
+                    style: const TextStyle(fontSize: 11, color: Glass.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                RoleLabel(
+                  role: latched ? BusRole.count : BusRole.idle,
+                  idle: t.kept,
+                  countText: t.latched,
+                ),
+              ],
             ),
           ],
         ),
@@ -671,12 +700,11 @@ class _Display extends StatelessWidget {
     final value = cpu.outputRegister;
     final printable =
         outputs.isNotEmpty && outputs.every((v) => Glass.char(v) != null);
-    final count = outputs.isEmpty
-        ? null
-        : '${outputs.length} value${outputs.length == 1 ? '' : 's'}';
+    final t = tBoard;
+    final count = outputs.isEmpty ? null : t.valueCount(outputs.length);
 
     return Semantics(
-      label: 'Display: $value',
+      label: t.displaySemantics(value),
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -699,12 +727,13 @@ class _Display extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [
-                const Text(
-                  'DISPLAY',
-                  style: TextStyle(
+                Text(
+                  t.display,
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1,
@@ -712,9 +741,9 @@ class _Display extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'port 0',
-                  style: TextStyle(fontSize: 11, color: _rose),
+                Text(
+                  t.port(0),
+                  style: const TextStyle(fontSize: 11, color: _rose),
                 ),
                 const Spacer(),
                 if (count != null)
@@ -769,9 +798,9 @@ class _Display extends StatelessWidget {
   /// (its latest end kept), numbers newest first.
   Widget _history(bool printable) {
     if (outputs.isEmpty) {
-      return const Text(
-        'nothing output yet\nOUT copies A here',
-        style: TextStyle(fontSize: 11, height: 1.5, color: _rose),
+      return Text(
+        tBoard.displayEmpty,
+        style: const TextStyle(fontSize: 11, height: 1.5, color: _rose),
       );
     }
     const valueStyle = TextStyle(
@@ -810,7 +839,7 @@ class _Display extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          printable ? 'as text' : 'newest first',
+          printable ? tBoard.asText : tBoard.newestFirst,
           style: const TextStyle(fontSize: 11, color: _rose),
         ),
         Text.rich(

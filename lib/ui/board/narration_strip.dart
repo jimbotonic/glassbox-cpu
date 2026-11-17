@@ -6,6 +6,7 @@ import '../../core/cpu.dart';
 import '../../core/disassembler.dart';
 import '../../core/opcode.dart';
 import '../../core/step_info.dart';
+import '../../l10n/app_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 import 'signal_roles.dart';
@@ -28,7 +29,8 @@ class NarrationStrip extends StatelessWidget {
   });
 
   String _nextText() {
-    if (cpu.halted) return 'Halted. Reset to run the program again.';
+    final t = tApp;
+    if (cpu.halted) return t.haltedNext;
     final mode = cpu.mode;
     if (cpu.atInstructionStart) {
       final pc = cpu.programCounter;
@@ -41,14 +43,18 @@ class NarrationStrip extends StatelessWidget {
             : null,
       );
       final line = assembly?.lineForAddress(pc);
-      return 'Next: fetch $text at ${mode.hexAddress(pc)}'
-          '${line == null ? '' : ' · line ${line + 1}'}';
+      return t.nextFetch(
+        text,
+        mode.hexAddress(pc),
+        line == null ? null : line + 1,
+      );
     }
-    return 'Next: T${cpu.microStep} of ${info.purpose}';
+    return t.nextStep(cpu.microStep, info.purpose);
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = tApp;
     final active = [
       for (final s in ControlWord.forMode(cpu.mode))
         if (s.isActive(info.controlWord)) s,
@@ -82,7 +88,7 @@ class NarrationStrip extends StatelessWidget {
                   text: ' ($char)',
                   style: const TextStyle(color: Color(0xFFC9B98A)),
                 ),
-              const TextSpan(text: ' → bus'),
+              TextSpan(text: ' → ${t.bus}'),
               if (info.destinationLabels.isNotEmpty) ...[
                 const TextSpan(text: ' → '),
                 TextSpan(
@@ -99,7 +105,7 @@ class NarrationStrip extends StatelessWidget {
           );
 
     return Semantics(
-      label: 'Last step',
+      label: t.lastStep,
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
@@ -153,9 +159,9 @@ class NarrationStrip extends StatelessWidget {
                 ),
                 if (detailed && active.isNotEmpty) ...[
                   const SizedBox(width: 12),
-                  const Text(
-                    'signals',
-                    style: TextStyle(fontSize: 12, color: Glass.busMuted),
+                  Text(
+                    t.signals,
+                    style: const TextStyle(fontSize: 12, color: Glass.busMuted),
                   ),
                   const SizedBox(width: 6),
                   for (final s in active)

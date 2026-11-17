@@ -25,17 +25,19 @@
 /// is never flooded. `K` and `#` lines can arrive at any time.
 library;
 
+import '../../../l10n/board_strings.dart';
+
 const int protocolVersion = 1;
 
 /// Parts a board can report in its `GLASSBOX` line.
 enum HardwarePart {
-  lcd('HD44780 text LCD'),
-  matrix('MAX7219 LED matrix'),
-  keypad('4x4 keypad'),
-  oled('SSD1306 OLED');
+  lcd,
+  matrix,
+  keypad,
+  oled;
 
-  const HardwarePart(this.label);
-  final String label;
+  /// Name shown to the user, in the current language.
+  String get label => tBoard.hardwarePart(name);
 }
 
 String _hex(int v) =>

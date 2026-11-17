@@ -1,3 +1,4 @@
+import '../l10n/editor_strings.dart';
 import 'cpu_mode.dart';
 import 'opcode.dart';
 
@@ -11,7 +12,8 @@ class AssemblerError implements Exception {
   const AssemblerError(this.message, {this.line});
 
   @override
-  String toString() => line == null ? message : 'Line $line: $message';
+  String toString() =>
+      line == null ? message : tEditor.errorAtLine(line!, message);
 }
 
 /// Machine code plus, for each address, the 0-based source line it came from.
@@ -139,7 +141,7 @@ class Assembler {
         default:
           if (s.keyword!.startsWith('.')) {
             throw AssemblerError(
-              'Unknown directive "${s.keyword!.toLowerCase()}"',
+              tEditor.unknownDirective(s.keyword!.toLowerCase()),
               line: s.line,
             );
           }
@@ -149,11 +151,9 @@ class Assembler {
       address += s.size;
     }
 
-    if (address == 0) throw const AssemblerError('Program is empty');
+    if (address == 0) throw AssemblerError(tEditor.programEmpty);
     if (address > memorySize) {
-      throw AssemblerError(
-        'Program needs $address bytes but RAM holds only $memorySize',
-      );
+      throw AssemblerError(tEditor.programTooBig(address, memorySize));
     }
 
     // Pass 2: emit bytes, now that forward references can be resolved.
@@ -219,13 +219,10 @@ class Assembler {
   void _define(Map<String, int> symbols, String name, int value, int line) {
     final key = name.toUpperCase();
     if (Opcode.isMnemonic(key)) {
-      throw AssemblerError(
-        '"$name" is an instruction and cannot be a name',
-        line: line,
-      );
+      throw AssemblerError(tEditor.nameIsInstruction(name), line: line);
     }
     if (symbols.containsKey(key)) {
-      throw AssemblerError('"$name" is already defined', line: line);
+      throw AssemblerError(tEditor.alreadyDefined(name), line: line);
     }
     symbols[key] = value;
   }
@@ -233,7 +230,7 @@ class Assembler {
   (String, String) _splitEqu(_Statement s) {
     final parts = s.operands.split(RegExp(r'\s*,\s*|\s+'));
     if (parts.length != 2 || !_identifierPattern.hasMatch(parts[0])) {
-      throw AssemblerError('Expected ".equ NAME value"', line: s.line);
+      throw AssemblerError(tEditor.expectedEqu, line: s.line);
     }
     return (parts[0], parts[1]);
   }
@@ -249,7 +246,10 @@ class Assembler {
   Opcode _opcode(_Statement s) {
     final candidates = Opcode.values.where((op) => op.mnemonic == s.keyword);
     if (candidates.isEmpty) {
-      throw AssemblerError('Unknown instruction "${s.keyword}"', line: s.line);
+      throw AssemblerError(
+        tEditor.unknownInstruction(s.keyword!),
+        line: s.line,
+      );
     }
     final indexed = _indexedB.hasMatch(s.operands);
     final hasOperand = s.operands.isNotEmpty;
@@ -257,20 +257,14 @@ class Assembler {
       (op) => (op.operand == OperandKind.indexedB) == indexed,
     );
     if (forms.isEmpty) {
-      throw AssemblerError(
-        '${s.keyword} cannot take [B]; only LDA [B] is indexed',
-        line: s.line,
-      );
+      throw AssemblerError(tEditor.cannotTakeIndexed(s.keyword!), line: s.line);
     }
     final opcode = forms.firstWhere(
       (op) => indexed || op.takesValue == hasOperand,
       orElse: () => forms.first,
     );
     if (!opcode.isAvailableIn(mode)) {
-      throw AssemblerError(
-        '${opcode.usage} exists only in Extended mode',
-        line: s.line,
-      );
+      throw AssemblerError(tEditor.extendedOnly(opcode.usage), line: s.line);
     }
     return opcode;
   }
@@ -287,12 +281,12 @@ class Assembler {
         ? const <String>[]
         : s.operands.split(RegExp(r'\s+'));
     if (parts.length > 1) {
-      throw AssemblerError('Unexpected "${parts[1]}"', line: s.line);
+      throw AssemblerError(tEditor.unexpected(parts[1]), line: s.line);
     }
     if (parts.isEmpty) {
       if (opcode.requiresOperand) {
         throw AssemblerError(
-          '${opcode.mnemonic} requires an operand',
+          tEditor.requiresOperand(opcode.mnemonic),
           line: s.line,
         );
       }
@@ -300,7 +294,7 @@ class Assembler {
     }
     if (!opcode.takesValue) {
       throw AssemblerError(
-        '${opcode.mnemonic} takes no operand, got "${parts[0]}"',
+        tEditor.takesNoOperand(opcode.mnemonic, parts[0]),
         line: s.line,
       );
     }
@@ -308,10 +302,7 @@ class Assembler {
     final operand = _value(parts[0], symbols, s.line);
     if (mode == CpuMode.classic) {
       if (operand < 0 || operand > 15) {
-        throw AssemblerError(
-          'Operand must be 0-15 (4-bit), got $operand',
-          line: s.line,
-        );
+        throw AssemblerError(tEditor.operand4Bit(operand), line: s.line);
       }
       return [code | operand];
     }
@@ -319,10 +310,9 @@ class Assembler {
     final min = opcode.operand == OperandKind.immediate ? -128 : 0;
     if (operand < min || operand > 255) {
       throw AssemblerError(switch (opcode.operand) {
-        OperandKind.immediate =>
-          'Value must be -128..255 (8-bit), got $operand',
-        OperandKind.port => 'Port must be 0-255, got $operand',
-        _ => 'Address must be 0-255 (8-bit), got $operand',
+        OperandKind.immediate => tEditor.value8Bit(operand),
+        OperandKind.port => tEditor.port8Bit(operand),
+        _ => tEditor.address8Bit(operand),
       }, line: s.line);
     }
     return [code, operand & 0xFF];
@@ -332,7 +322,7 @@ class Assembler {
   List<_DataItem> _dataItems(_Statement s) {
     final text = s.operands;
     if (text.isEmpty) {
-      throw AssemblerError('.db needs at least one value', line: s.line);
+      throw AssemblerError(tEditor.dbNeedsValue, line: s.line);
     }
 
     final items = <_DataItem>[];
@@ -340,7 +330,7 @@ class Assembler {
     void flush() {
       final item = buffer.toString().trim();
       if (item.isEmpty) {
-        throw AssemblerError('Missing value in .db', line: s.line);
+        throw AssemblerError(tEditor.dbMissingValue, line: s.line);
       }
       items.add(_DataItem(item, s.line, this));
       buffer.clear();
@@ -382,10 +372,7 @@ class Assembler {
     } else if (t.startsWith("'")) {
       final chars = _unescape(t, "'", line);
       if (chars.length != 1) {
-        throw AssemblerError(
-          'Character literal $t must hold one character',
-          line: line,
-        );
+        throw AssemblerError(tEditor.charLiteralLength(t), line: line);
       }
       value = chars.first;
     } else if (RegExp(r'^\d+$').hasMatch(t)) {
@@ -393,11 +380,11 @@ class Assembler {
     } else if (_identifierPattern.hasMatch(t)) {
       value = symbols[t.toUpperCase()];
       if (value == null) {
-        throw AssemblerError('Unknown name "$t"', line: line);
+        throw AssemblerError(tEditor.unknownName(t), line: line);
       }
     }
     if (value == null) {
-      throw AssemblerError('Invalid operand "$text"', line: line);
+      throw AssemblerError(tEditor.invalidOperand(text), line: line);
     }
     return negative ? -value : value;
   }
@@ -408,7 +395,7 @@ class Assembler {
         !text.startsWith(quote) ||
         !text.endsWith(quote) ||
         text == '$quote\\$quote') {
-      throw AssemblerError('Unterminated literal $text', line: line);
+      throw AssemblerError(tEditor.unterminatedLiteral(text), line: line);
     }
     final body = text.substring(1, text.length - 1);
     final codes = <int>[];
@@ -424,7 +411,7 @@ class Assembler {
       }
       final code = c.codeUnitAt(0);
       if (code > 0xFF) {
-        throw AssemblerError('"$c" does not fit in a byte', line: line);
+        throw AssemblerError(tEditor.notAByte(c), line: line);
       }
       codes.add(code);
     }
@@ -464,7 +451,7 @@ class _DataItem {
     if (isString) return assembler._unescape(text, '"', line);
     final value = assembler._value(text, symbols, line);
     if (value < -128 || value > 255) {
-      throw AssemblerError('Byte must be -128..255, got $value', line: line);
+      throw AssemblerError(tEditor.byteRange(value), line: line);
     }
     return [value & 0xFF];
   }

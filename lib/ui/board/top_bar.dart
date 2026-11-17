@@ -4,7 +4,10 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/cpu_mode.dart';
+import '../../l10n/app_strings.dart';
+import '../../l10n/l10n.dart';
 import '../theme/glass.dart';
+import 'first_that_fits.dart';
 import 'glass_widgets.dart';
 
 /// Identity, execution controls and view switches: one row on wide
@@ -27,6 +30,7 @@ class TopBar extends StatelessWidget {
   final VoidCallback? onRunToggle;
   final VoidCallback? onRunToCursor;
   final VoidCallback onReset;
+  final ValueChanged<Lang> onLangChanged;
 
   const TopBar({
     super.key,
@@ -46,6 +50,7 @@ class TopBar extends StatelessWidget {
     required this.onRunToggle,
     required this.onRunToCursor,
     required this.onReset,
+    required this.onLangChanged,
   });
 
   /// Selectable clock speeds in Hz, on a 1-2-5 log scale.
@@ -67,15 +72,9 @@ class TopBar extends StatelessWidget {
 
   static String formatSpeed(double hz) {
     if (hz >= 1000) return '${(hz / 1000).toStringAsFixed(0)} kHz';
-    if (hz < 1) return '$hz Hz';
+    if (hz < 1) return '${'$hz'.replaceAll('.', tApp.decimalSeparator)} Hz';
     return '${hz.toStringAsFixed(0)} Hz';
   }
-
-  /// Below this width the bar splits into two rows.
-  static const double oneRowWidth = 1340;
-
-  /// From this width the one-row bar also shows the tagline.
-  static const double taglineWidth = 1560;
 
   @override
   Widget build(BuildContext context) {
@@ -86,13 +85,15 @@ class TopBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(Glass.radius),
         border: Border.all(color: Glass.border),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          return w >= oneRowWidth
-              ? _oneRow(context, tagline: w >= taglineWidth)
-              : _twoRows(context);
-        },
+      // The widest layout the text of the current language fits: one row
+      // with the tagline, without it, compacted, else two rows.
+      child: FirstThatFits(
+        children: [
+          _oneRow(context, tagline: true),
+          _oneRow(context),
+          _oneRow(context, compact: true),
+          _twoRows(context),
+        ],
       ),
     );
   }
@@ -112,23 +113,31 @@ class TopBar extends StatelessWidget {
       ),
       if (tagline) ...[
         const SizedBox(width: 10),
-        const Text('every signal visible', style: Glass.note),
+        Text(tApp.tagline, style: Glass.note),
       ],
     ],
   );
 
   /// Machine and view switches, and the About button.
-  List<Widget> _switches() => [
+  List<Widget> _switches(AppStrings t, {bool compact = false}) => [
     Tooltip(
-      message:
-          'Classic: ${CpuMode.classic.description}\n'
-          'Extended: ${CpuMode.extended.description}\n'
-          'Switching clears RAM.',
+      message: t.modeTooltip(
+        CpuMode.classic.description,
+        CpuMode.extended.description,
+      ),
       child: GlassSegmented<CpuMode>(
-        semanticLabel: 'Machine',
-        options: const [
-          (CpuMode.classic, 'Classic', '16 B'),
-          (CpuMode.extended, 'Extended', '256 B'),
+        semanticLabel: t.machine,
+        options: [
+          (
+            CpuMode.classic,
+            CpuMode.classic.label,
+            compact ? null : '16 ${t.bytesUnit}',
+          ),
+          (
+            CpuMode.extended,
+            CpuMode.extended.label,
+            compact ? null : '256 ${t.bytesUnit}',
+          ),
         ],
         value: mode,
         onChanged: onModeChanged,
@@ -136,69 +145,77 @@ class TopBar extends StatelessWidget {
         selectedText: Glass.driveChip,
       ),
     ),
-    const SizedBox(width: 12),
+    SizedBox(width: compact ? 8 : 12),
     GlassSegmented<bool>(
-      semanticLabel: 'View',
-      options: const [(false, 'Simple', null), (true, 'Detailed', null)],
+      semanticLabel: t.view,
+      options: [(false, t.simple, null), (true, t.detailed, null)],
       value: detailed,
       onChanged: onDetailedChanged,
+    ),
+    SizedBox(width: compact ? 8 : 12),
+    GlassSegmented<Lang>(
+      semanticLabel: t.language,
+      options: [for (final l in Lang.values) (l, l.code, null)],
+      value: L10n.current,
+      onChanged: onLangChanged,
     ),
     const SizedBox(width: 8),
     GlassButton(
       icon: FluentIcons.info_24_regular,
-      tooltip: 'About GlassBox CPU',
+      tooltip: t.aboutTooltip,
       onPressed: onAbout,
     ),
   ];
 
-  Widget _controls() => Wrap(
+  Widget _controls(AppStrings t) => Wrap(
     spacing: 6,
     runSpacing: 6,
     children: [
       GlassButton(
         icon: FluentIcons.arrow_previous_24_regular,
-        tooltip: 'Step back: undo the last step',
+        tooltip: t.stepBackTooltip,
         onPressed: onStepBack,
       ),
       GlassButton(
-        label: 'Step',
-        detail: 'cycle',
-        tooltip: 'One clock cycle (micro-step)',
+        label: t.step,
+        detail: t.stepCycle,
+        tooltip: t.stepCycleTooltip,
         onPressed: onStep,
       ),
       GlassButton(
-        label: 'Step',
-        detail: 'instruction',
-        tooltip: 'Run the rest of the current instruction',
+        label: t.step,
+        detail: t.stepInstruction,
+        tooltip: t.stepInstructionTooltip,
         onPressed: onInstructionStep,
       ),
       GlassButton(
-        label: isRunning ? 'Pause' : 'Run',
+        label: isRunning ? t.pause : t.run,
         icon: isRunning
             ? FluentIcons.pause_24_filled
             : FluentIcons.play_24_filled,
         primary: true,
-        tooltip: 'Run until a breakpoint or HLT',
+        tooltip: t.runTooltip,
         onPressed: onRunToggle,
       ),
       GlassButton(
-        label: 'Run to cursor',
-        tooltip: 'Run until the instruction on the editor cursor line',
+        label: t.runToCursor,
+        tooltip: t.runToCursorTooltip,
         onPressed: onRunToCursor,
       ),
-      GlassButton(
-        label: 'Reset',
-        tooltip: 'Restart the loaded program',
-        onPressed: onReset,
-      ),
+      GlassButton(label: t.reset, tooltip: t.resetTooltip, onPressed: onReset),
     ],
   );
 
-  Widget _clock(BuildContext context, {bool compact = false}) => Row(
+  Widget _clock(
+    BuildContext context,
+    AppStrings t, {
+    bool compact = false,
+    bool bare = false,
+  }) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       Tooltip(
-        message: halted ? 'Halted' : 'Clock ${clockHigh ? 'high' : 'low'}',
+        message: halted ? t.halted : t.clockState(clockHigh),
         child: Container(
           width: 10,
           height: 10,
@@ -216,10 +233,13 @@ class TopBar extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(width: 8),
-      const Text('Clock', style: Glass.note),
+      // Bare: the light alone, its tooltip names it.
+      if (!bare) ...[
+        const SizedBox(width: 8),
+        Text(t.clock, style: Glass.note),
+      ],
       SizedBox(
-        width: compact ? 140 : 180,
+        width: compact ? 110 : 180,
         child: SliderTheme(
           data: SliderTheme.of(context).copyWith(
             activeTrackColor: Glass.drive,
@@ -254,32 +274,44 @@ class TopBar extends StatelessWidget {
   );
 
   /// Everything on one line, for wide windows.
-  Widget _oneRow(BuildContext context, {required bool tagline}) => Row(
-    children: [
-      _title(tagline: tagline),
-      const SizedBox(width: 20),
-      _controls(),
-      const SizedBox(width: 20),
-      _clock(context, compact: true),
-      const Spacer(),
-      ..._switches(),
-    ],
-  );
+  Widget _oneRow(
+    BuildContext context, {
+    bool tagline = false,
+    bool compact = false,
+  }) {
+    final t = tApp;
+    final gap = compact ? 14.0 : 20.0;
+    return Row(
+      children: [
+        _title(tagline: tagline),
+        SizedBox(width: gap),
+        _controls(t),
+        SizedBox(width: gap),
+        _clock(context, t, compact: true, bare: compact),
+        SizedBox(width: gap),
+        const Spacer(),
+        ..._switches(t, compact: compact),
+      ],
+    );
+  }
 
   /// Identity and view on top, execution below.
-  Widget _twoRows(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(children: [_title(tagline: true), const Spacer(), ..._switches()]),
-      const SizedBox(height: 10),
-      const Divider(height: 1, thickness: 1, color: Glass.borderSoft),
-      const SizedBox(height: 10),
-      Wrap(
-        spacing: 24,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [_controls(), _clock(context)],
-      ),
-    ],
-  );
+  Widget _twoRows(BuildContext context) {
+    final t = tApp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [_title(tagline: true), const Spacer(), ..._switches(t)]),
+        const SizedBox(height: 10),
+        const Divider(height: 1, thickness: 1, color: Glass.borderSoft),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 24,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [_controls(t), _clock(context, t)],
+        ),
+      ],
+    );
+  }
 }

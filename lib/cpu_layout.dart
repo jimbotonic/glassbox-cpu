@@ -4,6 +4,7 @@ import 'core/assembler.dart';
 import 'core/cpu.dart';
 import 'core/cpu_mode.dart';
 import 'core/step_info.dart';
+import 'l10n/l10n.dart';
 import 'ui/about_dialog.dart';
 import 'ui/board/datapath.dart';
 import 'ui/board/devices_panel.dart';
@@ -55,6 +56,9 @@ class CPULayout extends StatelessWidget {
   final ValueChanged<String> onKeypadKey;
   final HardwareController hardware;
 
+  // Language
+  final ValueChanged<Lang> onLangChanged;
+
   const CPULayout({
     super.key,
     required this.cpu,
@@ -80,6 +84,7 @@ class CPULayout extends StatelessWidget {
     required this.onCursorAddressChanged,
     required this.onKeypadKey,
     required this.hardware,
+    required this.onLangChanged,
   });
 
   static const double _gap = 14;
@@ -129,6 +134,7 @@ class CPULayout extends StatelessWidget {
             onRunToggle: halted && !isRunning ? null : onClockToggle,
             onRunToCursor: onRunToCursor,
             onReset: onReset,
+            onLangChanged: onLangChanged,
           ),
           const SizedBox(height: 12),
           NarrationStrip(
@@ -185,25 +191,39 @@ class CPULayout extends StatelessWidget {
       onKey: onKeypadKey,
       hardware: hardware,
     );
-    final main = SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Datapath(
-            cpu: cpu,
-            info: info,
-            assembly: assembly,
-            outputs: outputs,
+    // In the detailed view, at least as tall as the window allows: height
+    // to spare goes to the datapath, whose cards grow a little. The simple
+    // view, with no microcode below, keeps its natural height.
+    final main = LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: detailedView ? constraints.maxHeight : 0,
           ),
-          if (extended && !devicesBeside) ...[
-            const SizedBox(height: _gap),
-            devices,
-          ],
-          if (detailedView) ...[
-            const SizedBox(height: _gap),
-            MicrocodePanel(cpu: cpu),
-          ],
-        ],
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Datapath(
+                    cpu: cpu,
+                    info: info,
+                    assembly: assembly,
+                    outputs: outputs,
+                  ),
+                ),
+                if (extended && !devicesBeside) ...[
+                  const SizedBox(height: _gap),
+                  devices,
+                ],
+                if (detailedView) ...[
+                  const SizedBox(height: _gap),
+                  MicrocodePanel(cpu: cpu),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
     if (!devicesBeside) return main;

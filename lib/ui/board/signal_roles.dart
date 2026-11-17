@@ -1,18 +1,34 @@
 import '../../core/control_word.dart';
 import '../../core/cpu_mode.dart';
+import '../../l10n/app_strings.dart';
 import '../theme/glass.dart';
 
 /// Control signals grouped by what they do, for the microcode panel.
 class SignalGroup {
-  final String name;
+  final SignalGroupKind kind;
   final BusRole role;
   final List<ControlWord> signals;
 
-  const SignalGroup(this.name, this.role, this.signals);
+  const SignalGroup(this.kind, this.role, this.signals);
+
+  /// Name in the current language, e.g. `Drive bus`.
+  String get name {
+    final t = tApp;
+    return switch (kind) {
+      SignalGroupKind.drive => t.groupDrive,
+      SignalGroupKind.read => t.groupRead,
+      SignalGroupKind.counters => t.groupCounters,
+      SignalGroupKind.alu => t.groupAlu,
+      SignalGroupKind.control => t.groupControl,
+    };
+  }
 }
 
+/// What a group of signals does.
+enum SignalGroupKind { drive, read, counters, alu, control }
+
 const List<SignalGroup> _allGroups = [
-  SignalGroup('Drive bus', BusRole.drive, [
+  SignalGroup(SignalGroupKind.drive, BusRole.drive, [
     ControlWord.co,
     ControlWord.ro,
     ControlWord.io,
@@ -22,7 +38,7 @@ const List<SignalGroup> _allGroups = [
     ControlWord.so,
     ControlWord.dout,
   ]),
-  SignalGroup('Read bus', BusRole.read, [
+  SignalGroup(SignalGroupKind.read, BusRole.read, [
     ControlWord.mi,
     ControlWord.ri,
     ControlWord.ii,
@@ -33,12 +49,12 @@ const List<SignalGroup> _allGroups = [
     ControlWord.pi,
     ControlWord.di,
   ]),
-  SignalGroup('Counters', BusRole.count, [
+  SignalGroup(SignalGroupKind.counters, BusRole.count, [
     ControlWord.ce,
     ControlWord.spInc,
     ControlWord.spDec,
   ]),
-  SignalGroup('ALU', BusRole.count, [
+  SignalGroup(SignalGroupKind.alu, BusRole.count, [
     ControlWord.su,
     ControlWord.an,
     ControlWord.or,
@@ -47,7 +63,7 @@ const List<SignalGroup> _allGroups = [
     ControlWord.sr,
     ControlWord.fi,
   ]),
-  SignalGroup('Control', BusRole.count, [ControlWord.hlt]),
+  SignalGroup(SignalGroupKind.control, BusRole.count, [ControlWord.hlt]),
 ];
 
 /// The groups, keeping only the signals wired up in [mode].
@@ -55,7 +71,7 @@ List<SignalGroup> signalGroups(CpuMode mode) {
   final wired = ControlWord.forMode(mode).toSet();
   return [
     for (final g in _allGroups)
-      SignalGroup(g.name, g.role, g.signals.where(wired.contains).toList()),
+      SignalGroup(g.kind, g.role, g.signals.where(wired.contains).toList()),
   ];
 }
 
@@ -69,7 +85,8 @@ BusRole signalRole(ControlWord signal) {
 
 /// Short note on what a control word does, e.g. `RAM → A, PC + 1`.
 String wordNote(int word) {
-  if (word == 0) return 'nothing';
+  final t = tApp;
+  if (word == 0) return t.noteNothing;
   bool on(ControlWord s) => s.isActive(word);
   final source = on(ControlWord.co)
       ? 'PC'
@@ -86,7 +103,7 @@ String wordNote(int word) {
       : on(ControlWord.so)
       ? 'ALU'
       : on(ControlWord.dout)
-      ? 'device'
+      ? t.noteDevice
       : null;
   final readers = [
     if (on(ControlWord.mi)) 'MAR',
@@ -97,15 +114,15 @@ String wordNote(int word) {
     if (on(ControlWord.oi)) 'OUT',
     if (on(ControlWord.j)) 'PC',
     if (on(ControlWord.pi)) 'PORT',
-    if (on(ControlWord.di)) 'device',
+    if (on(ControlWord.di)) t.noteDevice,
   ];
   return [
     if (source != null)
-      '$source → ${readers.isEmpty ? 'bus' : readers.join(', ')}',
+      '$source → ${readers.isEmpty ? t.bus : readers.join(', ')}',
     if (on(ControlWord.ce)) 'PC + 1',
     if (on(ControlWord.spInc)) 'SP + 1',
     if (on(ControlWord.spDec)) 'SP − 1',
-    if (on(ControlWord.fi)) 'flags',
-    if (on(ControlWord.hlt)) 'halt',
+    if (on(ControlWord.fi)) t.noteFlags,
+    if (on(ControlWord.hlt)) t.noteHalt,
   ].join(', ');
 }

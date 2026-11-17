@@ -6,6 +6,7 @@ import 'core/assembler.dart';
 import 'core/cpu.dart';
 import 'core/cpu_mode.dart';
 import 'core/io/keypad.dart';
+import 'l10n/l10n.dart';
 import 'ui/hardware/hardware_controller.dart';
 import 'cpu_layout.dart';
 import 'ui/theme/glass.dart';
@@ -276,7 +277,22 @@ class _CPUBoardState extends State<CPUBoard> {
           setState(() => cpu.io.device<Keypad>()?.press(key));
         },
         hardware: hardware,
+        onLangChanged: _onLangChanged,
       ),
     );
+  }
+
+  /// Switches language and rebuilds every widget, const ones included,
+  /// keeping all state.
+  void _onLangChanged(Lang lang) {
+    if (lang == L10n.current) return;
+    L10n.set(lang);
+    void rebuild(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(rebuild);
+    }
+
+    (context as Element).visitChildren(rebuild);
+    setState(() {});
   }
 }
