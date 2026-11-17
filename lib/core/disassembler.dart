@@ -1,3 +1,4 @@
+import '../l10n/isa_strings.dart';
 import 'cpu_mode.dart';
 import 'opcode.dart';
 
@@ -35,7 +36,7 @@ class Disassembler {
       final size = opcode.sizeIn(mode);
       if (size == 2 && a + 1 < ram.length) {
         lines[a] = disassemble(ram[a], mode: mode, operand: ram[a + 1]);
-        lines[a + 1] = '  ↳ operand';
+        lines[a + 1] = tIsa.operandRow;
       } else {
         lines[a] = disassemble(ram[a], mode: mode);
       }
