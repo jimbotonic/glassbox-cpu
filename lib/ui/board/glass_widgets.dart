@@ -1,6 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
+import '../../l10n/board_strings.dart';
 import '../theme/glass.dart';
 
 /// Panel whose border and glow show its [role] on the bus. The size never
@@ -68,9 +69,9 @@ class RoleLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color) = switch (role) {
-      BusRole.drive => ('DRIVES BUS ▸', Glass.driveText),
-      BusRole.read => ('◂ READS BUS', Glass.readText),
-      BusRole.count => (countText ?? 'COUNTS', Glass.count),
+      BusRole.drive => (tBoard.drivesBus, Glass.driveText),
+      BusRole.read => (tBoard.readsBus, Glass.readText),
+      BusRole.count => (countText ?? tBoard.counts, Glass.count),
       BusRole.idle => (idle, Glass.dim),
     };
     return Text(
@@ -416,7 +417,7 @@ class GlassDialogFrame extends StatelessWidget {
                 const SizedBox(width: 12),
                 GlassButton(
                   icon: FluentIcons.dismiss_24_regular,
-                  tooltip: 'Close',
+                  tooltip: tBoard.close,
                   height: 36,
                   onPressed: () => Navigator.of(context).pop(),
                 ),

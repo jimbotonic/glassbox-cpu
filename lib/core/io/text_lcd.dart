@@ -1,4 +1,5 @@
 import 'io_ports.dart';
+import '../../l10n/board_strings.dart';
 
 /// A 16x2 character LCD with an HD44780 controller, the chip on almost
 /// every hobby LCD module, with its 8-bit interface on two ports.
@@ -82,13 +83,18 @@ class TextLcd extends IoDevice {
   int? _lastCommand;
 
   @override
-  String get name => 'Text LCD';
+  String get name => tBoard.textLcd;
 
   @override
   List<int> get ports => [commandPort, dataPort];
 
   @override
-  String portName(int port) => port == commandPort ? 'LCD command' : 'LCD data';
+  String portName(int port) =>
+      port == commandPort ? tBoard.lcdCommandPort : tBoard.lcdDataPort;
+
+  @override
+  String portRole(int port) =>
+      port == commandPort ? tBoard.commandRole : tBoard.dataRole;
 
   /// Character code shown at [row], [column] of the screen.
   int charAt(int row, int column) =>

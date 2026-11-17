@@ -8,6 +8,7 @@ import '../../core/io/led_matrix.dart';
 import '../../core/io/text_lcd.dart';
 import '../hardware/hardware_controller.dart';
 import '../hardware/hardware_dialog.dart';
+import '../../l10n/board_strings.dart';
 import '../theme/glass.dart';
 import 'glass_widgets.dart';
 
@@ -45,6 +46,7 @@ class DevicesPanel extends StatelessWidget {
     final lcd = io.device<TextLcd>();
     final matrix = io.device<LedMatrix>();
     final keypad = io.device<Keypad>();
+    final t = tBoard;
 
     return GlassPanel(
       padding: const EdgeInsets.all(14),
@@ -53,11 +55,11 @@ class DevicesPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('I/O DEVICES', style: Glass.panelTitle),
+              Text(t.ioDevices, style: Glass.panelTitle),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'OUT port writes A to a device · IN port reads one into A',
+                  t.ioDevicesNote,
                   style: Glass.note,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -107,17 +109,18 @@ class _HardwareButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bridge = hardware.bridge;
     final connected = hardware.connected;
+    final t = tBoard;
     final label = connected
-        ? 'Board: ${bridge.board!.board}'
+        ? t.boardButton(bridge.board!.board)
         : hardware.busy
-        ? 'Connecting…'
-        : 'Real hardware';
+        ? t.connecting
+        : t.realHardware;
     return GlassButton(
       label: label,
       height: 32,
       tooltip: connected
-          ? 'Mirrored to ${bridge.link!.description}'
-          : 'Mirror these devices to an Arduino, ESP32 or Raspberry Pi',
+          ? t.mirroredTo(bridge.link!.description)
+          : t.mirrorTooltip,
       fill: connected ? Glass.okText.withValues(alpha: 0.12) : null,
       foreground: connected ? Glass.okText : null,
       onPressed: () => showHardwareDialog(context, hardware),
@@ -139,10 +142,13 @@ class _DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ports = device.ports;
+    final t = tBoard;
     final portText = ports.length == 1
-        ? 'port ${ports.first} · ${device.portName(ports.first)}'
-        : 'ports ${ports.join('–')} · '
-              '${[for (final p in ports) device.portName(p).split(' ').last].join(', ')}';
+        ? t.devicePort(ports.first, device.portName(ports.first))
+        : t.devicePorts(
+            ports.join('–'),
+            [for (final p in ports) device.portRole(p)].join(', '),
+          );
     return GlassPanel(
       role: role,
       color: Glass.sunken,
@@ -190,12 +196,13 @@ class _LcdView extends StatelessWidget {
   static const _ink = Color(0xFF1C2608);
 
   String _status() {
-    if (!lcd.displayOn) return 'display off · send 0x0C to turn it on';
+    final t = tBoard;
+    if (!lcd.displayOn) return t.lcdOff;
     final where = lcd.addressingCgram
         ? 'CGRAM 0x${lcd.address.toRadixString(16).toUpperCase().padLeft(2, '0')}'
-        : 'cursor ${Glass.hex2(lcd.address)}';
-    return '$where · ${lcd.moveRight ? 'writes go right' : 'writes go left'}'
-        '${lcd.displayShift == 0 ? '' : ' · shifted ${lcd.displayShift}'}';
+        : t.lcdCursor(Glass.hex2(lcd.address));
+    return '$where · ${lcd.moveRight ? t.writesRight : t.writesLeft}'
+        '${lcd.displayShift == 0 ? '' : ' · ${t.shifted(lcd.displayShift)}'}';
   }
 
   @override
@@ -398,7 +405,7 @@ class _MatrixView extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = matrix.selectedRow;
     return Semantics(
-      label: 'LED matrix rows: ${matrix.rows.map(Glass.hex2).join(' ')}',
+      label: tBoard.matrixSemantics(matrix.rows.map(Glass.hex2).join(' ')),
       child: Container(
         padding: const EdgeInsets.fromLTRB(6, 8, 8, 8),
         decoration: BoxDecoration(
@@ -480,6 +487,7 @@ class _KeypadView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = keypad.pending;
+    final t = tBoard;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -495,8 +503,7 @@ class _KeypadView extends StatelessWidget {
                   child: GlassButton(
                     label: key,
                     height: _keyHeight,
-                    tooltip:
-                        "Press $key: IN reads ${Glass.hex2(key.codeUnitAt(0))}",
+                    tooltip: t.keyTooltip(key, Glass.hex2(key.codeUnitAt(0))),
                     fill: key.codeUnitAt(0) == pending ? Glass.busGround : null,
                     foreground: key.codeUnitAt(0) == pending ? Glass.bus : null,
                     onPressed: () => onKey(key),
@@ -508,8 +515,8 @@ class _KeypadView extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           pending == null
-              ? 'no key waiting · IN reads 0'
-              : "waiting: '${String.fromCharCode(pending)}' · IN reads ${Glass.hex2(pending)}",
+              ? t.noKey
+              : t.keyWaiting(String.fromCharCode(pending), Glass.hex2(pending)),
           style: Glass.code.copyWith(
             fontSize: 11,
             color: pending == null ? Glass.muted : Glass.bus,

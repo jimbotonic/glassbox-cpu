@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 
 import '../core/io/bridge/hardware_bridge.dart';
+import '../l10n/board_strings.dart';
 import 'serial_ports.dart';
 
 SerialPorts create() => _WebSerialPorts();
@@ -43,8 +44,7 @@ class _WebSerialPorts extends SerialPorts {
   bool get supported => _serial != null;
 
   @override
-  String get unsupportedReason =>
-      'This browser has no Web Serial: use Chrome or Edge, or Wi-Fi.';
+  String get unsupportedReason => tBoard.noWebSerial;
 
   @override
   bool get usesBrowserPicker => true;
@@ -87,7 +87,7 @@ class _WebSerialLink implements HardwareLink {
     final info = _port.getInfo();
     final vid = info.usbVendorId, pid = info.usbProductId;
     String hex(int v) => v.toRadixString(16).padLeft(4, '0');
-    return vid == null ? 'USB serial' : 'USB ${hex(vid)}:${hex(pid ?? 0)}';
+    return vid == null ? tBoard.usbSerial : 'USB ${hex(vid)}:${hex(pid ?? 0)}';
   }
 
   @override
@@ -98,7 +98,7 @@ class _WebSerialLink implements HardwareLink {
     try {
       await _port.open(_OpenOptions(baudRate: baud)).toDart;
     } catch (e) {
-      throw StateError('Cannot open the port (in use by another program?): $e');
+      throw StateError(tBoard.cannotOpenBrowserPort(e));
     }
     _writer = _port.writable!.getWriter();
     _reader = _port.readable!.getReader() as web.ReadableStreamDefaultReader;
@@ -114,7 +114,7 @@ class _WebSerialLink implements HardwareLink {
         final bytes = (result.value as JSUint8Array).toDart;
         _received.add(latin1.decode(bytes));
       }
-      if (!_closing) _received.addError(StateError('The port closed'));
+      if (!_closing) _received.addError(StateError(tBoard.portClosed));
     } catch (e) {
       if (!_closing) _received.addError(e);
     } finally {
