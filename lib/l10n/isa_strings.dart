@@ -333,7 +333,8 @@ class _En implements IsaStrings {
       'Subtract - Subtracts value from RAM from A register.',
       _addr,
       'Reads value from memory address, subtracts it from register A, '
-          'stores result in A. Sets carry flag if underflow (result < 0). '
+          'stores result in A. Sets carry flag on a borrow (value larger '
+          'than A, so the result wraps below 0). '
           'Sets zero flag if result = 0.',
       'A = A - RAM[14]',
     ),
@@ -634,8 +635,9 @@ class _Fr implements IsaStrings {
       'Soustraire - Soustrait une valeur de la RAM du registre A.',
       _addr,
       "Lit la valeur à l'adresse mémoire, la soustrait du registre A, "
-          'place le résultat dans A. Met la retenue à 1 en cas de '
-          "dépassement par le bas (résultat < 0). Met l'indicateur zéro à 1 "
+          'place le résultat dans A. Met la retenue à 1 en cas d’emprunt '
+          '(valeur plus grande que A, le résultat repasse sous 0). '
+          "Met l'indicateur zéro à 1 "
           'si le résultat = 0.',
       'A = A - RAM[14]',
     ),
@@ -949,7 +951,8 @@ class _De implements IsaStrings {
       _addr,
       'Liest den Wert an der Speicheradresse, subtrahiert ihn von '
           'Register A, speichert das Ergebnis in A. Setzt das Übertrags-Flag '
-          'bei Unterlauf (Ergebnis < 0). Setzt das Null-Flag, wenn '
+          'bei einem Borgen (Wert größer als A, das Ergebnis läuft unter 0). '
+          'Setzt das Null-Flag, wenn '
           'Ergebnis = 0.',
       'A = A - RAM[14]',
     ),
