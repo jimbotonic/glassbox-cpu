@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cpu_mode.dart';
+import '../../l10n/isa_strings.dart';
 import '../board/glass_widgets.dart';
 import '../theme/glass.dart';
 
@@ -12,30 +13,24 @@ class InstructionSetDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = tIsa;
     return GlassDialogFrame(
-      title: 'INSTRUCTION SET',
-      note: mode == CpuMode.extended
-          ? 'Every instruction of the Extended CPU, then the Classic ones it '
-                'keeps.'
-          : 'Every instruction of the Classic CPU, its operand and an '
-                'example.',
+      title: t.title,
+      note: mode == CpuMode.extended ? t.noteExtended : t.noteClassic,
       width: 640,
       maxHeight: 720,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (mode == CpuMode.extended) ...[
-            _buildExtendedSection(),
+            _buildExtendedSection(t),
             const SizedBox(height: 20),
-            const GlassSectionTitle(
-              'Classic instructions, also in Extended with 8-bit operands '
-              '(addresses 0-255, values -128..255)',
-            ),
+            GlassSectionTitle(t.classicInExtended),
             const SizedBox(height: 4),
           ],
-          _buildOperandTypesSection(),
+          _buildOperandTypesSection(t),
           const SizedBox(height: 20),
-          _buildInstructionsSection(),
+          _buildInstructionsSection(t),
           const SizedBox(height: 20),
           const _SyntaxSection(),
         ],
@@ -43,9 +38,7 @@ class InstructionSetDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildExtendedSection() {
-    const addr = 'Address (0-255), operand byte';
-    const imm = 'Value (-128..255), operand byte';
+  Widget _buildExtendedSection(IsaStrings t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -56,161 +49,113 @@ class InstructionSetDialog extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Glass.busBorder),
           ),
-          child: const Text(
-            'EXTENDED CPU: 256 bytes of RAM. An instruction is an opcode '
-            'byte, followed by an operand byte when it takes an address or '
-            'a value; the CPU reads that byte at the program counter '
-            '(CO|MI, then RO|..|CE). Names ending in I take a value, the '
-            'others an address. The ALU always works on A and B, so ADD, '
-            'SUB, AND, OR, XOR, CMP, ADI and SBI overwrite B. The stack '
-            'grows down from 0xFF; keep code and data below it.',
-            style: TextStyle(color: Glass.textSoft, fontSize: 12, height: 1.5),
+          child: Text(
+            t.extendedIntro,
+            style: const TextStyle(
+              color: Glass.textSoft,
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
         ),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: DATA MOVEMENT', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catExtData, const [
+          _InstructionInfo(
+            IsaCard.ldb,
             mnemonic: 'LDB',
             hex: '0x0B',
             usage: 'LDB addr',
-            description: 'Load B - Loads value from RAM into B register.',
-            behavior:
-                'Reads RAM[addr] into B. Use it to set the index for LDA [B].',
-            operandType: addr,
-            example: 'LDB ptr ; B = RAM[ptr]',
+            exampleCode: 'LDB ptr',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.ldaIndexed,
             mnemonic: 'LDA [B]',
             hex: '0x30',
             usage: 'LDA [B]',
-            description: 'Indexed load - Loads from the address held in B.',
-            behavior:
-                'B drives the bus into MAR (BO|MI), then RAM goes into A '
-                '(RO|AI). Walks arrays and strings. One byte, no operand.',
-            operandType: 'None ([B] is written in the source)',
-            example: 'LDA [B] ; A = RAM[B]',
+            exampleCode: 'LDA [B]',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: ALU', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catExtAlu, const [
+          _InstructionInfo(
+            IsaCard.adi,
             mnemonic: 'ADI',
             hex: '0x0C',
             usage: 'ADI #val',
-            description: 'Add Immediate - A = A + val.',
-            behavior: 'The value goes into B, then A + B into A. Sets C and Z.',
-            operandType: imm,
-            example: 'ADI 1 ; A = A + 1',
+            exampleCode: 'ADI 1',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.sbi,
             mnemonic: 'SBI',
             hex: '0x0D',
             usage: 'SBI #val',
-            description: 'Subtract Immediate - A = A - val.',
-            behavior: 'Like ADI, subtracting. C is set on a borrow.',
-            operandType: imm,
-            example: 'SBI 1 ; A = A - 1',
+            exampleCode: 'SBI 1',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.logic,
             mnemonic: 'AND / OR / XOR',
             hex: '0x10-0x12',
             usage: 'AND addr',
-            description: 'Bitwise logic - A = A op RAM[addr].',
-            behavior: 'Bit by bit on A and B. Clears C, sets Z.',
-            operandType: addr,
-            example: 'AND mask ; keep the bits set in RAM[mask]',
+            exampleCode: 'AND mask',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.cmp,
             mnemonic: 'CMP',
             hex: '0x13',
             usage: 'CMP addr',
-            description: 'Compare - Computes A - RAM[addr] for the flags only.',
-            behavior:
-                'A is unchanged. Z = 1 when equal; C = 1 when A is smaller.',
-            operandType: addr,
-            example: 'CMP limit ; then JZ / JC / JNZ / JNC',
+            exampleCode: 'CMP limit',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.shift,
             mnemonic: 'SHL / SHR',
             hex: '0x14 / 0x15',
             usage: 'SHL',
-            description: 'Shift A left or right by one bit.',
-            behavior:
-                'The bit shifted out goes into C; a 0 comes in. SHL doubles, '
-                'SHR halves.',
-            operandType: 'None',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: JUMPS & STACK', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catExtJumps, const [
+          _InstructionInfo(
+            IsaCard.jnzJnc,
             mnemonic: 'JNZ / JNC',
             hex: '0x0A / 0x09',
             usage: 'JNZ addr',
-            description: 'Jump if Not Zero / Not Carry.',
-            behavior:
-                'Jumps when the flag is 0. Otherwise one step (CE) skips the '
-                'operand byte.',
-            operandType: addr,
-            example: 'JNZ loop',
+            exampleCode: 'JNZ loop',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.pushPop,
             mnemonic: 'PUSH / POP',
             hex: '0x20 / 0x21',
             usage: 'PUSH',
-            description: 'Save A on the stack / restore it.',
-            behavior:
-                'PUSH writes A at RAM[SP] then SP = SP - 1. POP does SP = SP '
-                '+ 1 then A = RAM[SP]. Last in, first out.',
-            operandType: 'None',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.call,
             mnemonic: 'CALL',
             hex: '0x22',
             usage: 'CALL addr',
-            description: 'Call a subroutine.',
-            behavior:
-                'Pushes PC (the address of its own operand byte), then jumps '
-                'to addr.',
-            operandType: addr,
-            example: 'CALL multiply',
+            exampleCode: 'CALL multiply',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.ret,
             mnemonic: 'RET',
             hex: '0x23',
             usage: 'RET',
-            description: 'Return from a subroutine.',
-            behavior:
-                'Pops the saved PC, then steps past the CALL\'s operand byte '
-                '(CE), landing on the instruction after the CALL.',
-            operandType: 'None',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('EXTENDED: I/O PORTS', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catExtIo, const [
+          _InstructionInfo(
+            IsaCard.outPort,
             mnemonic: 'OUT port',
             hex: '0x18',
             usage: 'OUT 2',
-            description: 'Write A to the device on a port.',
-            behavior:
-                'The operand byte goes into the port register (RO|PI|CE), '
-                'then A drives the bus and the device there reads it '
-                '(AO|DI). Plain OUT is port 0, the display.',
-            operandType: 'Port number (0-255), operand byte',
-            example: 'OUT 2 ; A -> LCD data: show a character',
+            exampleCode: 'OUT 2',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.inPort,
             mnemonic: 'IN port',
             hex: '0x19',
             usage: 'IN 5',
-            description: 'Read the device on a port into A.',
-            behavior:
-                'Selects the port (RO|PI|CE), then the device drives the bus '
-                'into A (DO|AI). Sets no flags: test the value with CMP. '
-                'A port with nothing connected reads 0.',
-            operandType: 'Port number (0-255), operand byte',
-            example: 'IN 5 ; A = last key pressed, or 0',
+            exampleCode: 'IN 5',
           ),
         ]),
         const _PortMap(),
@@ -218,175 +163,125 @@ class InstructionSetDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildOperandTypesSection() {
-    return const Column(
+  Widget _buildOperandTypesSection(IsaStrings t) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GlassSectionTitle('Operand types'),
+        GlassSectionTitle(t.operandTypes),
         _OperandTypeCard(
           prefix: '#',
-          name: 'Immediate Value',
+          name: t.immediateName,
           example: 'LDI #5',
-          description:
-              'A literal value (0-15) loaded directly into the register. '
-              'Does NOT access memory - the value itself is used.',
+          description: t.immediateDesc,
         ),
-        SizedBox(height: 6),
+        const SizedBox(height: 6),
         _OperandTypeCard(
           prefix: '0x',
-          name: 'Hexadecimal Address',
+          name: t.hexName,
           example: 'LDA 0xE',
-          description:
-              'A memory address in hexadecimal format (0x0-0xF). '
-              'Accesses the value stored at that RAM location.',
+          description: t.hexDesc,
         ),
-        SizedBox(height: 6),
+        const SizedBox(height: 6),
         _OperandTypeCard(
           prefix: '',
-          name: 'Decimal Address',
+          name: t.decimalName,
           example: 'LDA 14',
-          description:
-              'A memory address in decimal format (0-15). '
-              'Accesses the value stored at that RAM location. Same as hex, just different notation.',
+          description: t.decimalDesc,
         ),
       ],
     );
   }
 
-  Widget _buildInstructionsSection() {
+  Widget _buildInstructionsSection(IsaStrings t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInstructionCategory('CONTROL FLOW', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catControl, const [
+          _InstructionInfo(
+            IsaCard.nop,
             mnemonic: 'NOP',
             hex: '0x0',
             usage: 'NOP',
-            description: 'No Operation - Does nothing, uses one clock cycle.',
-            behavior:
-                'The program counter increments but no data is moved or modified.',
-            operandType: 'None',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.hlt,
             mnemonic: 'HLT',
             hex: '0xF',
             usage: 'HLT',
-            description: 'Halt - Stops program execution.',
-            behavior:
-                'The clock stops and the CPU enters a halted state. No further instructions execute.',
-            operandType: 'None',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('DATA MOVEMENT', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catData, const [
+          _InstructionInfo(
+            IsaCard.lda,
             mnemonic: 'LDA',
             hex: '0x1',
             usage: 'LDA addr',
-            description:
-                'Load from Address - Loads value from RAM into A register.',
-            behavior:
-                'Reads the value at the specified memory address and stores it in register A. '
-                'Previous A register value is overwritten.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'LDA 0xE ; Load value from RAM[14] into A',
+            exampleCode: 'LDA 0xE',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.ldi,
             mnemonic: 'LDI',
             hex: '0x5',
             usage: 'LDI #val',
-            description:
-                'Load Immediate - Loads a literal value into A register.',
-            behavior:
-                'Stores the immediate value directly into register A. '
-                'Does NOT access memory - the operand IS the value.',
-            operandType: 'Immediate value (#0-#15)',
-            example: 'LDI #7 ; Load the number 7 into A',
+            exampleCode: 'LDI #7',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.sta,
             mnemonic: 'STA',
             hex: '0x4',
             usage: 'STA addr',
-            description: 'Store to Address - Stores A register value into RAM.',
-            behavior:
-                'Writes the current value of register A to the specified memory address. '
-                'A register value remains unchanged.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'STA 0xD ; Store A register value to RAM[13]',
+            exampleCode: 'STA 0xD',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('ARITHMETIC', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catArith, const [
+          _InstructionInfo(
+            IsaCard.add,
             mnemonic: 'ADD',
             hex: '0x2',
             usage: 'ADD addr',
-            description: 'Add - Adds value from RAM to A register.',
-            behavior:
-                'Reads value from memory address, adds it to register A, stores result in A. '
-                'Sets carry flag if result > 255. Sets zero flag if result = 0.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'ADD 0xF ; A = A + RAM[15]',
+            exampleCode: 'ADD 0xF',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.sub,
             mnemonic: 'SUB',
             hex: '0x3',
             usage: 'SUB addr',
-            description: 'Subtract - Subtracts value from RAM from A register.',
-            behavior:
-                'Reads value from memory address, subtracts it from register A, stores result in A. '
-                'Sets carry flag if underflow (result < 0). Sets zero flag if result = 0.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'SUB 14 ; A = A - RAM[14]',
+            exampleCode: 'SUB 14',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('JUMPS & BRANCHES', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catJumps, const [
+          _InstructionInfo(
+            IsaCard.jmp,
             mnemonic: 'JMP',
             hex: '0x6',
             usage: 'JMP addr',
-            description: 'Jump - Unconditionally jumps to specified address.',
-            behavior:
-                'Sets the program counter to the operand address. Execution continues from that address. '
-                'Used for loops and function calls.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'JMP 0 ; Jump back to start of program',
+            exampleCode: 'JMP 0',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.jc,
             mnemonic: 'JC',
             hex: '0x7',
             usage: 'JC addr',
-            description: 'Jump if Carry - Jumps only if carry flag is set.',
-            behavior:
-                'If carry flag = 1, sets program counter to operand address. '
-                'Otherwise, continues to next instruction. Used for overflow detection.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'JC 8 ; Jump to address 8 if overflow occurred',
+            exampleCode: 'JC 8',
           ),
-          const _InstructionInfo(
+          _InstructionInfo(
+            IsaCard.jz,
             mnemonic: 'JZ',
             hex: '0x8',
             usage: 'JZ addr',
-            description: 'Jump if Zero - Jumps only if zero flag is set.',
-            behavior:
-                'If zero flag = 1 (last ALU result was 0), sets program counter to operand address. '
-                'Otherwise, continues to next instruction. Used for conditional logic.',
-            operandType: 'Address (0x0-0xF or 0-15)',
-            example: 'JZ 10 ; Jump to address 10 if A = 0',
+            exampleCode: 'JZ 10',
           ),
         ]),
         const SizedBox(height: 16),
-        _buildInstructionCategory('OUTPUT', [
-          const _InstructionInfo(
+        _buildInstructionCategory(t.catOutput, const [
+          _InstructionInfo(
+            IsaCard.out,
             mnemonic: 'OUT',
             hex: '0xE',
             usage: 'OUT',
-            description: 'Output - Displays value from A register.',
-            behavior:
-                'Sends the current value of register A to the output display '
-                '(port 0). A register value remains unchanged.',
-            operandType: 'None',
           ),
         ]),
       ],
@@ -411,23 +306,22 @@ class InstructionSetDialog extends StatelessWidget {
   }
 }
 
+/// One card's code-side facts; its text comes from [IsaStrings.entry].
 class _InstructionInfo {
+  final IsaCard card;
   final String mnemonic;
   final String hex;
   final String usage;
-  final String description;
-  final String behavior;
-  final String operandType;
-  final String? example;
 
-  const _InstructionInfo({
+  /// Code of the example, if any; its `; comment` comes from the entry.
+  final String? exampleCode;
+
+  const _InstructionInfo(
+    this.card, {
     required this.mnemonic,
     required this.hex,
     required this.usage,
-    required this.description,
-    required this.behavior,
-    required this.operandType,
-    this.example,
+    this.exampleCode,
   });
 }
 
@@ -484,6 +378,10 @@ class _InstructionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = tIsa;
+    final entry = t.entry(info.card);
+    final code = info.exampleCode;
+    final note = entry.exampleNote;
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -513,7 +411,7 @@ class _InstructionCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            info.description,
+            entry.description,
             style: const TextStyle(
               color: Glass.text,
               fontSize: 13,
@@ -524,15 +422,15 @@ class _InstructionCard extends StatelessWidget {
           Text.rich(
             TextSpan(
               children: [
-                const TextSpan(
-                  text: 'Operand  ',
-                  style: TextStyle(
+                TextSpan(
+                  text: t.operandLabel,
+                  style: const TextStyle(
                     color: Glass.dim,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 TextSpan(
-                  text: info.operandType,
+                  text: entry.operand,
                   style: const TextStyle(color: Glass.synArg),
                 ),
               ],
@@ -541,16 +439,16 @@ class _InstructionCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            info.behavior,
+            entry.behavior,
             style: const TextStyle(
               color: Glass.muted,
               fontSize: 12,
               height: 1.45,
             ),
           ),
-          if (info.example != null) ...[
+          if (code != null) ...[
             const SizedBox(height: 8),
-            GlassCodeBlock(info.example!),
+            GlassCodeBlock(note == null ? code : '$code ; $note'),
           ],
         ],
       ),
@@ -587,7 +485,7 @@ class _OperandTypeCard extends StatelessWidget {
                   border: Border.all(color: Glass.borderSoft),
                 ),
                 child: Text(
-                  prefix.isEmpty ? 'no prefix' : prefix,
+                  prefix.isEmpty ? tIsa.noPrefix : prefix,
                   style: TextStyle(
                     fontFamily: Glass.mono,
                     color: prefix.isEmpty ? Glass.dim : Glass.synArg,
@@ -636,37 +534,19 @@ class _OperandTypeCard extends StatelessWidget {
 class _PortMap extends StatelessWidget {
   const _PortMap();
 
+  /// Port number and whether it is an input; the text is in [IsaStrings].
   static const _ports = [
-    ('0', 'Display', 'out', 'Output register: plain OUT, or OUT 0'),
-    (
-      '1',
-      'Text LCD command',
-      'out',
-      '0x01 clear, 0x0C display on, 0x80+addr cursor; IN: cursor address',
-    ),
-    ('2', 'Text LCD data', 'out', 'A character at the cursor, which moves on'),
-    (
-      '3',
-      'LED matrix row',
-      'out',
-      'Selects the row (0-7) the next data byte lights',
-    ),
-    (
-      '4',
-      'LED matrix data',
-      'out',
-      'Bit 7 = left LED; then the next row is selected',
-    ),
-    (
-      '5',
-      'Keypad',
-      'in',
-      "ASCII of the last key pressed ('0'-'9', 'A'-'D', '*', '#'), once; 0 if none",
-    ),
+    (0, false),
+    (1, false),
+    (2, false),
+    (3, false),
+    (4, false),
+    (5, true),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final t = tIsa;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -677,16 +557,16 @@ class _PortMap extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Port map',
-            style: TextStyle(
+          Text(
+            t.portMap,
+            style: const TextStyle(
               color: Glass.text,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          for (final (port, device, direction, meaning) in _ports)
+          for (final (port, isInput) in _ports)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
@@ -695,7 +575,7 @@ class _PortMap extends StatelessWidget {
                   SizedBox(
                     width: 22,
                     child: Text(
-                      port,
+                      '$port',
                       style: const TextStyle(
                         fontFamily: Glass.mono,
                         color: Glass.synArg,
@@ -707,36 +587,33 @@ class _PortMap extends StatelessWidget {
                   SizedBox(
                     width: 130,
                     child: Text(
-                      device,
+                      t.port(port).$1,
                       style: const TextStyle(color: Glass.text, fontSize: 12),
                     ),
                   ),
                   SizedBox(
-                    width: 30,
+                    width: 46,
                     child: Text(
-                      direction,
+                      isInput ? t.dirIn : t.dirOut,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: direction == 'in'
-                            ? Glass.driveText
-                            : Glass.readText,
+                        color: isInput ? Glass.driveText : Glass.readText,
                       ),
                     ),
                   ),
                   Expanded(
                     child: Text(
-                      meaning,
+                      t.port(port).$2,
                       style: const TextStyle(color: Glass.muted, fontSize: 12),
                     ),
                   ),
                 ],
               ),
             ),
-          const Text(
-            'The LCD starts with its display off, like the real HD44780: '
-            'send 0x38 then 0x0C first. See the I/O devices built-in programs.',
-            style: TextStyle(color: Glass.dim, fontSize: 11),
+          Text(
+            t.lcdNote,
+            style: const TextStyle(color: Glass.dim, fontSize: 11),
           ),
         ],
       ),
@@ -748,35 +625,23 @@ class _PortMap extends StatelessWidget {
 class _SyntaxSection extends StatelessWidget {
   const _SyntaxSection();
 
-  static const _example =
-      '.equ STEP 1       ; constant: a name for a number\n'
-      'loop: LDA n       ; label: a name for an address\n'
-      '      OUT\n'
-      '      SUB step    ; names work wherever a number does\n'
-      '      STA n\n'
-      '      JZ  done    ; jump forward to a label\n'
-      '      JMP loop\n'
-      'done: HLT\n'
-      'n:    .db 5       ; data: one byte per value\n'
-      'step: .db STEP';
-
-  static const _rules = [
-    ('label:', 'Names the address of the next byte. Use it as an operand.'),
-    ('.equ NAME value', 'Defines a constant. Takes no space in RAM.'),
-    (
-      '.db 1, 0x2A, \'A\', "HI"',
-      'Places bytes (0-255) in RAM: numbers, characters, strings, labels.',
-    ),
-    ('0x1F  0b101  \'A\'', 'Hex, binary and character literals.'),
+  /// Syntax of each rule; the meanings are in [IsaStrings].
+  static const _syntax = [
+    'label:',
+    '.equ NAME value',
+    '.db 1, 0x2A, \'A\', "HI"',
+    '0x1F  0b101  \'A\'',
   ];
 
   @override
   Widget build(BuildContext context) {
+    final t = tIsa;
+    final meanings = [t.ruleLabel, t.ruleEqu, t.ruleDb, t.ruleLiterals];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const GlassSectionTitle('Labels, constants & data'),
-        for (final (syntax, meaning) in _rules)
+        GlassSectionTitle(t.syntaxTitle),
+        for (var i = 0; i < _syntax.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
@@ -785,7 +650,7 @@ class _SyntaxSection extends StatelessWidget {
                 SizedBox(
                   width: 180,
                   child: Text(
-                    syntax,
+                    _syntax[i],
                     style: const TextStyle(
                       fontFamily: Glass.mono,
                       color: Glass.synLabel,
@@ -795,7 +660,7 @@ class _SyntaxSection extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    meaning,
+                    meanings[i],
                     style: const TextStyle(color: Glass.textSoft, fontSize: 12),
                   ),
                 ),
@@ -803,12 +668,11 @@ class _SyntaxSection extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 4),
-        const GlassCodeBlock(_example),
+        GlassCodeBlock(t.syntaxExample),
         const SizedBox(height: 6),
-        const Text(
-          'After Assemble & load, the gutter lists each line\'s address and '
-          'first byte. Names are not case-sensitive.',
-          style: TextStyle(color: Glass.dim, fontSize: 11),
+        Text(
+          t.syntaxNote,
+          style: const TextStyle(color: Glass.dim, fontSize: 11),
         ),
       ],
     );
