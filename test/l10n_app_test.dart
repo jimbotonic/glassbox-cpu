@@ -18,7 +18,6 @@ List<String> sample() {
   final halt = StepInfo.of(cpu);
   return [
     t.windowTooSmallTitle,
-    t.reset,
     t.runToCursor,
     t.step,
     t.modeTooltip('a', 'b'),

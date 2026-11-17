@@ -313,7 +313,7 @@ class _Fr implements AppStrings {
   String get stepInstructionTooltip =>
       'Exécuter le reste de l’instruction en cours';
   @override
-  String get run => 'Exécuter';
+  String get run => 'Lancer';
   @override
   String get pause => 'Pause';
   @override
@@ -324,7 +324,7 @@ class _Fr implements AppStrings {
   String get runToCursorTooltip =>
       'Exécuter jusqu’à l’instruction de la ligne du curseur';
   @override
-  String get reset => 'Réinitialiser';
+  String get reset => 'Reset';
   @override
   String get resetTooltip => 'Relancer le programme chargé';
   @override
@@ -341,8 +341,7 @@ class _Fr implements AppStrings {
   @override
   String get signals => 'signaux';
   @override
-  String get haltedNext =>
-      'Arrêté. Réinitialiser pour exécuter à nouveau le programme.';
+  String get haltedNext => 'Arrêté. Reset pour relancer le programme.';
   @override
   String nextFetch(String instruction, String address, int? line) =>
       'Suivant : lecture de $instruction à l’adresse $address'
@@ -387,7 +386,7 @@ class _Fr implements AppStrings {
   @override
   String get groupCounters => 'Compteurs';
   @override
-  String get groupAlu => 'ALU';
+  String get groupAlu => 'UAL';
   @override
   String get groupControl => 'Contrôle';
   @override
@@ -489,7 +488,7 @@ class _De implements AppStrings {
   String get runToCursorTooltip =>
       'Bis zum Befehl in der Cursorzeile des Editors ausführen';
   @override
-  String get reset => 'Zurücksetzen';
+  String get reset => 'Reset';
   @override
   String get resetTooltip => 'Geladenes Programm neu starten';
   @override
@@ -507,7 +506,7 @@ class _De implements AppStrings {
   String get signals => 'Signale';
   @override
   String get haltedNext =>
-      'Angehalten. Zurücksetzen, um das Programm erneut auszuführen.';
+      'Angehalten. Reset, um das Programm erneut zu starten.';
   @override
   String nextFetch(String instruction, String address, int? line) =>
       'Als Nächstes: $instruction an Adresse $address holen'

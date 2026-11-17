@@ -7,6 +7,7 @@ import '../../core/cpu_mode.dart';
 import '../../l10n/app_strings.dart';
 import '../../l10n/l10n.dart';
 import '../theme/glass.dart';
+import 'first_that_fits.dart';
 import 'glass_widgets.dart';
 
 /// Identity, execution controls and view switches: one row on wide
@@ -75,12 +76,6 @@ class TopBar extends StatelessWidget {
     return '${hz.toStringAsFixed(0)} Hz';
   }
 
-  /// Below this width the bar splits into two rows.
-  static const double oneRowWidth = 1340;
-
-  /// From this width the one-row bar also shows the tagline.
-  static const double taglineWidth = 1560;
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -90,13 +85,15 @@ class TopBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(Glass.radius),
         border: Border.all(color: Glass.border),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          return w >= oneRowWidth
-              ? _oneRow(context, tagline: w >= taglineWidth)
-              : _twoRows(context);
-        },
+      // The widest layout the text of the current language fits: one row
+      // with the tagline, without it, compacted, else two rows.
+      child: FirstThatFits(
+        children: [
+          _oneRow(context, tagline: true),
+          _oneRow(context),
+          _oneRow(context, compact: true),
+          _twoRows(context),
+        ],
       ),
     );
   }
@@ -122,7 +119,7 @@ class TopBar extends StatelessWidget {
   );
 
   /// Machine and view switches, and the About button.
-  List<Widget> _switches(AppStrings t) => [
+  List<Widget> _switches(AppStrings t, {bool compact = false}) => [
     Tooltip(
       message: t.modeTooltip(
         CpuMode.classic.description,
@@ -131,8 +128,16 @@ class TopBar extends StatelessWidget {
       child: GlassSegmented<CpuMode>(
         semanticLabel: t.machine,
         options: [
-          (CpuMode.classic, CpuMode.classic.label, '16 ${t.bytesUnit}'),
-          (CpuMode.extended, CpuMode.extended.label, '256 ${t.bytesUnit}'),
+          (
+            CpuMode.classic,
+            CpuMode.classic.label,
+            compact ? null : '16 ${t.bytesUnit}',
+          ),
+          (
+            CpuMode.extended,
+            CpuMode.extended.label,
+            compact ? null : '256 ${t.bytesUnit}',
+          ),
         ],
         value: mode,
         onChanged: onModeChanged,
@@ -140,14 +145,14 @@ class TopBar extends StatelessWidget {
         selectedText: Glass.driveChip,
       ),
     ),
-    const SizedBox(width: 12),
+    SizedBox(width: compact ? 8 : 12),
     GlassSegmented<bool>(
       semanticLabel: t.view,
       options: [(false, t.simple, null), (true, t.detailed, null)],
       value: detailed,
       onChanged: onDetailedChanged,
     ),
-    const SizedBox(width: 12),
+    SizedBox(width: compact ? 8 : 12),
     GlassSegmented<Lang>(
       semanticLabel: t.language,
       options: [for (final l in Lang.values) (l, l.code, null)],
@@ -201,79 +206,91 @@ class TopBar extends StatelessWidget {
     ],
   );
 
-  Widget _clock(BuildContext context, AppStrings t, {bool compact = false}) =>
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Tooltip(
-            message: halted ? t.halted : t.clockState(clockHigh),
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: clockHigh ? Glass.led : const Color(0xFF3A2020),
-                boxShadow: clockHigh
-                    ? [
-                        BoxShadow(
-                          color: Glass.led.withValues(alpha: 0.7),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
-              ),
-            ),
+  Widget _clock(
+    BuildContext context,
+    AppStrings t, {
+    bool compact = false,
+    bool bare = false,
+  }) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Tooltip(
+        message: halted ? t.halted : t.clockState(clockHigh),
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: clockHigh ? Glass.led : const Color(0xFF3A2020),
+            boxShadow: clockHigh
+                ? [
+                    BoxShadow(
+                      color: Glass.led.withValues(alpha: 0.7),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
           ),
-          const SizedBox(width: 8),
-          Text(t.clock, style: Glass.note),
-          SizedBox(
-            width: compact ? 140 : 180,
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: Glass.drive,
-                inactiveTrackColor: Glass.border,
-                thumbColor: Glass.driveText,
-                overlayColor: Glass.drive.withValues(alpha: 0.15),
-                trackHeight: 3,
-                tickMarkShape: SliderTickMarkShape.noTickMark,
-              ),
-              child: Slider(
-                value: speedIndex(speed).toDouble(),
-                max: (speeds.length - 1).toDouble(),
-                divisions: speeds.length - 1,
-                label: formatSpeed(speed),
-                semanticFormatterCallback: (v) =>
-                    formatSpeed(speeds[v.round()]),
-                onChanged: (v) => onSpeedChanged(speeds[v.round()]),
-              ),
-            ),
+        ),
+      ),
+      // Bare: the light alone, its tooltip names it.
+      if (!bare) ...[
+        const SizedBox(width: 8),
+        Text(t.clock, style: Glass.note),
+      ],
+      SizedBox(
+        width: compact ? 110 : 180,
+        child: SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: Glass.drive,
+            inactiveTrackColor: Glass.border,
+            thumbColor: Glass.driveText,
+            overlayColor: Glass.drive.withValues(alpha: 0.15),
+            trackHeight: 3,
+            tickMarkShape: SliderTickMarkShape.noTickMark,
           ),
-          SizedBox(
-            width: 56,
-            child: Text(
-              formatSpeed(speed),
-              style: const TextStyle(
-                fontFamily: Glass.mono,
-                fontSize: 13,
-                color: Glass.text,
-              ),
-            ),
+          child: Slider(
+            value: speedIndex(speed).toDouble(),
+            max: (speeds.length - 1).toDouble(),
+            divisions: speeds.length - 1,
+            label: formatSpeed(speed),
+            semanticFormatterCallback: (v) => formatSpeed(speeds[v.round()]),
+            onChanged: (v) => onSpeedChanged(speeds[v.round()]),
           ),
-        ],
-      );
+        ),
+      ),
+      SizedBox(
+        width: 56,
+        child: Text(
+          formatSpeed(speed),
+          style: const TextStyle(
+            fontFamily: Glass.mono,
+            fontSize: 13,
+            color: Glass.text,
+          ),
+        ),
+      ),
+    ],
+  );
 
   /// Everything on one line, for wide windows.
-  Widget _oneRow(BuildContext context, {required bool tagline}) {
+  Widget _oneRow(
+    BuildContext context, {
+    bool tagline = false,
+    bool compact = false,
+  }) {
     final t = tApp;
+    final gap = compact ? 14.0 : 20.0;
     return Row(
       children: [
         _title(tagline: tagline),
-        const SizedBox(width: 20),
+        SizedBox(width: gap),
         _controls(t),
-        const SizedBox(width: 20),
-        _clock(context, t, compact: true),
+        SizedBox(width: gap),
+        _clock(context, t, compact: true, bare: compact),
+        SizedBox(width: gap),
         const Spacer(),
-        ..._switches(t),
+        ..._switches(t, compact: compact),
       ],
     );
   }

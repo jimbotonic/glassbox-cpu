@@ -593,25 +593,30 @@ class _Flags extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: set ? Glass.led : Glass.border),
         ),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: '$letter ${set ? 1 : 0}',
-                style: const TextStyle(
-                  fontFamily: Glass.mono,
-                  fontWeight: FontWeight.w700,
-                  color: Glass.text,
+        // One line whatever the language: a long flag name shrinks.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$letter ${set ? 1 : 0}',
+                  style: const TextStyle(
+                    fontFamily: Glass.mono,
+                    fontWeight: FontWeight.w700,
+                    color: Glass.text,
+                  ),
                 ),
-              ),
-              TextSpan(
-                text: '  $name',
-                style: const TextStyle(color: Glass.muted),
-              ),
-            ],
+                TextSpan(
+                  text: '  $name',
+                  style: const TextStyle(color: Glass.muted),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 12),
           ),
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12),
         ),
       ),
     );
@@ -632,20 +637,31 @@ class _Flags extends StatelessWidget {
                 flag('C', cpu.carryFlag, t.carry),
                 const SizedBox(width: 8),
                 flag('Z', cpu.zeroFlag, t.zero),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 5),
+            // Kept or latched sits under the chips, leaving them the width.
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    t.flagsDecide(
+                      cpu.mode == CpuMode.classic
+                          ? 'JC, JZ'
+                          : 'JC, JZ, JNC, JNZ',
+                    ),
+                    style: const TextStyle(fontSize: 11, color: Glass.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 RoleLabel(
                   role: latched ? BusRole.count : BusRole.idle,
                   idle: t.kept,
                   countText: t.latched,
                 ),
               ],
-            ),
-            const SizedBox(height: 5),
-            Text(
-              t.flagsDecide(
-                cpu.mode == CpuMode.classic ? 'JC, JZ' : 'JC, JZ, JNC, JNZ',
-              ),
-              style: const TextStyle(fontSize: 11, color: Glass.muted),
             ),
           ],
         ),

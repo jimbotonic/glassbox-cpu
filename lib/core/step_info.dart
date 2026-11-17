@@ -22,7 +22,11 @@ enum BusNode {
   const BusNode(this._label);
 
   /// Short name on the datapath, e.g. `PC`; `I/O` is translated.
-  String get label => this == device ? tApp.ioNode : _label;
+  String get label => switch (this) {
+    device => tApp.ioNode,
+    alu => tApp.groupAlu,
+    _ => _label,
+  };
 }
 
 /// Plain-language description of the micro-step a [Cpu] just executed:

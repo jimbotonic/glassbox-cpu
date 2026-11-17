@@ -577,7 +577,7 @@ class _Fr implements BoardStrings {
   String selectsRam(String address, String? symbol) =>
       'sélectionne RAM[$address]${symbol == null ? '' : ' · $symbol'}';
   @override
-  String get irEmpty => 'vide jusqu’à la première lecture';
+  String get irEmpty => 'vide avant la 1re lecture';
   @override
   String irExtended(String instruction, String? operandAddress) =>
       '$instruction'
@@ -608,8 +608,7 @@ class _Fr implements BoardStrings {
   @override
   String get flagsLatchedWire => 'FI · indicateurs verrouillés depuis l’UAL';
   @override
-  String get flagsInWire =>
-      'FI · entrée des indicateurs, depuis le résultat de l’UAL';
+  String get flagsInWire => 'FI · indicateurs ← résultat de l’UAL';
   @override
   String get carry => 'retenue';
   @override
@@ -646,7 +645,7 @@ class _Fr implements BoardStrings {
   String get ram => 'RAM';
   @override
   String ramSummary(int bytes, int addressBits) =>
-      '$bytes octets · adresses sur $addressBits bits · toucher pour modifier';
+      '$bytes octets · adresses $addressBits bits · clic pour modifier';
   @override
   String get goToPc => 'Aller au PC';
   @override

@@ -191,12 +191,15 @@ class CPULayout extends StatelessWidget {
       onKey: onKeypadKey,
       hardware: hardware,
     );
-    // At least as tall as the window allows: height to spare goes to the
-    // datapath, whose cards grow a little.
+    // In the detailed view, at least as tall as the window allows: height
+    // to spare goes to the datapath, whose cards grow a little. The simple
+    // view, with no microcode below, keeps its natural height.
     final main = LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
         child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          constraints: BoxConstraints(
+            minHeight: detailedView ? constraints.maxHeight : 0,
+          ),
           child: IntrinsicHeight(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

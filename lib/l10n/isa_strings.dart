@@ -446,7 +446,7 @@ class _Fr implements IsaStrings {
       "d'opcode, suivi d'un octet d'opérande quand elle prend une adresse "
       "ou une valeur ; le CPU lit cet octet à l'adresse du compteur de "
       "programme (CO|MI, puis RO|..|CE). Les noms finissant par I prennent "
-      "une valeur, les autres une adresse. L'ALU travaille toujours sur A "
+      "une valeur, les autres une adresse. L'UAL travaille toujours sur A "
       "et B, donc ADD, SUB, AND, OR, XOR, CMP, ADI et SBI écrasent B. La "
       "pile croît vers le bas à partir de 0xFF ; garder le code et les "
       "données en dessous.";
@@ -454,7 +454,7 @@ class _Fr implements IsaStrings {
   @override
   String get catExtData => 'ÉTENDU : TRANSFERT DE DONNÉES';
   @override
-  String get catExtAlu => 'ÉTENDU : ALU';
+  String get catExtAlu => 'ÉTENDU : UAL';
   @override
   String get catExtJumps => 'ÉTENDU : SAUTS ET PILE';
   @override
@@ -658,7 +658,7 @@ class _Fr implements IsaStrings {
     IsaCard.jz => const IsaEntry(
       "Saut si zéro - Saute seulement si l'indicateur zéro est à 1.",
       _addr,
-      "Si l'indicateur zéro = 1 (le dernier résultat de l'ALU valait 0), "
+      "Si l'indicateur zéro = 1 (le dernier résultat de l'UAL valait 0), "
           "met l'adresse de l'opérande dans le compteur de programme. "
           "Sinon, passe à l'instruction suivante. Sert aux conditions.",
       "Saute à l'adresse 10 si A = 0",
